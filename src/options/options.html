@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="head">
+    <div class="brand">
+      <span class="moon" aria-hidden="true"></span>
+      <h1 data-i18n="optTitle"></h1>
+    </div>
+    <span class="toast" id="toast"></span>
+  </header>
+
+  <div class="bg-error" id="bgError" style="display:none"></div>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="general" data-i18n="tabGeneral"></button>
+    <button type="button" data-tab="appearance" data-i18n="tabAppearance"></button>
+    <button type="button" data-tab="lists" data-i18n="tabLists"></button>
+    <button type="button" data-tab="advanced" data-i18n="tabAdvanced"></button>
+    <button type="button" data-tab="backup" data-i18n="tabBackup"></button>
+  </nav>
+
+  <section data-panel="general">
+
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <div class="label" data-i18n="lblEnabled"></div>
+          <div class="hint" data-i18n="hintEnabled"></div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="enabled">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" data-i18n="lblMode"></div>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="auto" data-i18n="popupAuto"></button>
+        <button type="button" data-mode="dark" data-i18n="popupNight"></button>
+        <button type="button" data-mode="light" data-i18n="popupDay"></button>
+      </div>
+      <div class="hint" data-i18n="hintAuto"></div>
+    </div>
+
+    <div class="card">
+      <div class="label" data-i18n="lblSchedule"></div>
+      <div class="seg" id="typeSeg">
+        <button type="button" data-type="sun" data-i18n="optFollowSun"></button>
+        <button type="button" data-type="time" data-i18n="optFixedTime"></button>
+      </div>
+
+      <div id="sunFields">
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="latitude" data-i18n="lblLatitude"></label>
+            <input type="number" id="latitude" step="0.0001" min="-90" max="90" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label class="label" for="longitude" data-i18n="lblLongitude"></label>
+            <input type="number" id="longitude" step="0.0001" min="-180" max="180" inputmode="decimal">
+          </div>
+        </div>
+        <div class="hint" data-i18n="hintLatLng"></div>
+
+        <div class="field inline">
+          <button type="button" class="btn" id="detect" data-i18n="btnDetect"></button>
+          <span class="inline-status" id="detectStatus"></span>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="sunsetOffset" data-i18n="lblSunsetOffset"></label>
+            <input type="number" id="sunsetOffset" step="5" min="-300" max="300" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label class="label" for="sunriseOffset" data-i18n="lblSunriseOffset"></label>
+            <input type="number" id="sunriseOffset" step="5" min="-300" max="300" inputmode="numeric">
+          </div>
+        </div>
+        <div class="hint" data-i18n="hintOffset"></div>
+      </div>
+
+      <div id="timeFields">
+        <div class="grid2">
+          <div class="field">
+            <label class="label" for="startTime" data-i18n="lblStartTime"></label>
+            <input type="time" id="startTime">
+          </div>
+          <div class="field">
+            <label class="label" for="endTime" data-i18n="lblEndTime"></label>
+            <input type="time" id="endTime">
+          </div>
+        </div>
+      </div>
+
+      <div class="computed" id="computed">
+        <div class="computed-row"><span data-i18n="grpComputed"></span></div>
+        <div class="computed-row"><span data-i18n="lblTodaySunset"></span><b id="computedSunset">—</b></div>
+        <div class="computed-row"><span data-i18n="lblTodaySunrise"></span><b id="computedSunrise">—</b></div>
+        <div class="hint warn" id="polarHint" data-i18n="hintPolar"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" data-i18n="lblShortcuts"></div>
+      <div class="hint" data-i18n="hintShortcuts"></div>
+    </div>
+
+  </section>
+
+  <section data-panel="appearance">
+
+    <div class="card">
+      <div class="preview-viewport">
+        <div class="preview-page" id="previewPage">
+          <h3 data-i18n="previewHeading"></h3>
+          <p data-i18n="previewBody"></p>
+          <button type="button" class="preview-btn" data-i18n="previewButton"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="slider">
+        <div class="slider-head">
+          <label for="invert" data-i18n="lblInvert"></label>
+          <output id="invertOut"></output>
+        </div>
+        <input type="range" id="invert" min="60" max="100" step="1">
+        <div class="hint" data-i18n="hintInvert"></div>
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <label for="brightness" data-i18n="lblBrightness"></label>
+          <output id="brightnessOut"></output>
+        </div>
+        <input type="range" id="brightness" min="40" max="150" step="1">
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <label for="contrast" data-i18n="lblContrast"></label>
+          <output id="contrastOut"></output>
+        </div>
+        <input type="range" id="contrast" min="50" max="150" step="1">
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <label for="saturation" data-i18n="lblSaturation"></label>
+          <output id="saturationOut"></output>
+        </div>
+        <input type="range" id="saturation" min="0" max="150" step="1">
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <label for="temperature" data-i18n="lblWarmth"></label>
+          <output id="temperatureOut"></output>
+        </div>
+        <input type="range" id="temperature" min="-100" max="100" step="1">
+      </div>
+
+      <div class="slider">
+        <div class="slider-head">
+          <label for="grayscale" data-i18n="lblGrayscale"></label>
+          <output id="grayscaleOut"></output>
+        </div>
+        <input type="range" id="grayscale" min="0" max="100" step="1">
+      </div>
+
+      <button type="button" class="btn" id="resetAppearance" data-i18n="btnResetAppearance"></button>
+    </div>
+
+  </section>
+
+  <section data-panel="lists">
+
+    <div class="card">
+      <div class="label" data-i18n="lblBlacklistBox"></div>
+      <div class="hint" data-i18n="hintBlacklist"></div>
+      <div class="rule-list" id="blacklistView"></div>
+      <div class="rule-add">
+        <input type="text" id="blacklistInput" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn" id="blacklistAdd" data-i18n="btnAdd"></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" data-i18n="lblWhitelistBox"></div>
+      <div class="hint" data-i18n="hintWhitelist"></div>
+      <div class="rule-list" id="whitelistView"></div>
+      <div class="rule-add">
+        <input type="text" id="whitelistInput" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn" id="whitelistAdd" data-i18n="btnAdd"></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hint" data-i18n="hintRules"></div>
+      <div class="current-site">
+        <span class="label" data-i18n="lblCurrentSite"></span>
+        <code id="currentSite">—</code>
+      </div>
+    </div>
+
+  </section>
+
+  <section data-panel="advanced">
+
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <div class="label" data-i18n="lblPreserveMedia"></div>
+          <div class="hint" data-i18n="hintPreserveMedia"></div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="preserveMedia">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <div>
+          <div class="label" data-i18n="lblSkipDark"></div>
+          <div class="hint" data-i18n="hintSkipDark"></div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="skipDark">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label" data-i18n="lblTarget"></div>
+      <div class="radio-list" id="targetList">
+        <label><input type="radio" name="target" value="html"><span data-i18n="optHtml"></span></label>
+        <label><input type="radio" name="target" value="body"><span data-i18n="optBody"></span></label>
+      </div>
+      <div class="hint" data-i18n="hintTarget"></div>
+    </div>
+
+  </section>
+
+  <section data-panel="backup">
+
+    <div class="card">
+      <div class="hint" data-i18n="hintBackup"></div>
+      <div class="btn-row">
+        <button type="button" class="btn" id="exportBtn" data-i18n="btnExport"></button>
+        <button type="button" class="btn" id="importBtn" data-i18n="btnImport"></button>
+        <button type="button" class="btn danger" id="restoreBtn" data-i18n="btnRestore"></button>
+      </div>
+      <input type="file" id="fileInput" accept="application/json,.json" hidden>
+    </div>
+
+  </section>
+
+  <footer class="foot" data-i18n="optFooter"></footer>
+</div>
+
+  <script src="../lib/config.js"></script>
+  <script src="../lib/sun.js"></script>
+  <script src="../lib/filter.js"></script>
+  <script src="../lib/cities.data.js"></script>
+  <script src="../lib/cities.js"></script>
+  <script src="../lib/store.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

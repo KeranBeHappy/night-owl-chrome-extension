@@ -1,0 +1,38 @@
+=== 生成的 CSS ===
+--- ON ---
+html.nw-dark { filter: invert(1) hue-rotate(180deg) saturate(0.900) sepia(0.075) !important; }
+html.nw-dark img,
+html.nw-dark video,
+html.nw-dark canvas,
+html.nw-dark iframe,
+html.nw-dark embed,
+html.nw-dark object,
+html.nw-dark [data-nw-preserve] { filter: hue-rotate(180deg) invert(1) saturate(1.111) !important; }
+
+--- OFF ---
+html.nw-dark { filter: invert(0.92) hue-rotate(180deg) saturate(0.900) sepia(0.075) !important; }
+
+open=0
+shot=0
+img 1200x600
+
+=== 验收 1：ON 态图片色相是否与原色一致 ===
+  #ff0000  原=#ff0000(H0)  ON=#a34644(H1)  OFF=#f59793(H2)  ΔH=1  OK  ON≠OFF:Y
+  #00ff00  原=#00ff00(H120)  ON=#3cb838(H118)  OFF=#12880f(H119)  ΔH=2  OK  ON≠OFF:Y
+  #0000ff  原=#0000ff(H240)  ON=#21213f(H240)  OFF=#d2d0f6(H243)  ΔH=0  OK  ON≠OFF:Y
+  #ffffff  原=#ffffff(H-1)  ON=#fffffe(H60)  OFF=#151514(H60)  ΔH=0  OK  ON≠OFF:Y
+  #000000  原=#000000(H-1)  ON=#000000(H-1)  OFF=#f1eee9(H38)  ΔH=0  OK  ON≠OFF:Y
+  #808080  原=#808080(H-1)  ON=#83827f(H45)  OFF=#82817e(H45)  ΔH=0  OK  ON≠OFF:N
+  #ff8800  原=#ff8800(H32)  ON=#f18339(H24)  OFF=#b76212(H29)  ΔH=8  OK  ON≠OFF:Y
+  #00ffff  原=#00ffff(H180)  ON=#62bdba(H178)  OFF=#106c6b(H179)  ΔH=2  OK  ON≠OFF:Y
+
+=== 验收 2：黑白灰是否精确还原 ===
+  #ffffff  ON=#fffffe  Δ=1  OK
+  #000000  ON=#000000  Δ=0  OK
+  #808080  ON=#83827f  Δ=6  OK
+
+=== 总判定 ===
+  验收1 色相一致   : PASS
+  验收2 开关有效   : PASS
+  验收3 黑白灰精确 : PASS
+  >>> ALL PASS

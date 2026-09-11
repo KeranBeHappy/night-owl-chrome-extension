@@ -1,0 +1,25 @@
+初始化：加载 lib（全局单例）
+
+
+### A 一切正常
+  PASS  A 一切正常 · 初始为黑夜  got=true want=true
+  PASS  A 一切正常 · 切白天页面跟随  got=false want=false
+
+### B tab 无 content script（补注入路径）
+  PASS  B tab 无 content script（补注入路径） · 初始无监听（预期未着色）  got=false want=false
+  PASS  B tab 无 content script（补注入路径） · 初始未注入  got=false want=false
+  PASS  B tab 无 content script（补注入路径） · 切白天页面跟随  got=false want=false
+  PASS  B tab 无 content script（补注入路径） · 补注入已发生  got=true want=true
+
+### C 有 content script 但 probe 不应答
+  PASS  C 有 content script 但 probe 不应答 · 初始为黑夜  got=true want=true
+  PASS  C 有 content script 但 probe 不应答 · 切白天页面跟随  got=false want=false
+
+### D 消息通道彻底坏（query+tick 全吞）
+  PASS  D 消息通道彻底坏（query+tick 全吞） · 初始为黑夜  got=true want=true
+  PASS  D 消息通道彻底坏（query+tick 全吞） · 切白天页面跟随  got=false want=false
+
+==============================
+  PASS=10  FAIL=0
+  ALL PASS
+==============================

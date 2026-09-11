@@ -1,0 +1,6 @@
+/* Night Owl — 静态注入样式表
+ *
+ * 实际滤镜由 content.js 在运行时按配置生成，写入 #night-owl-runtime-style。
+ * 此文件保持为空壳，仅为让 content_scripts 在 document_start 前具备样式通道，
+ * 避免动态 <style> 插入时机不确定带来的额外抖动。
+ */

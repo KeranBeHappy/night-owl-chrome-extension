@@ -1,0 +1,180 @@
+:root {
+  --bg: #1c1c1e;
+  --panel: #2c2c2e;
+  --panel-2: #3a3a3c;
+  --text: #f2f2f7;
+  --muted: #98989d;
+  --accent: #7f77dd;
+  --moon: #f5c86a;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 300px;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.brand { display: flex; align-items: center; gap: 8px; }
+
+.moon {
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--moon);
+  position: relative;
+  flex: none;
+}
+.moon::after {
+  content: "";
+  position: absolute;
+  left: 6px; top: -4px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+h1 { font-size: 14px; font-weight: 500; margin: 0; }
+
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.track {
+  display: block;
+  width: 38px; height: 22px;
+  border-radius: 11px;
+  background: var(--panel-2);
+  position: relative;
+  cursor: pointer;
+  transition: background .15s;
+}
+.knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s;
+}
+.switch input:checked + .track { background: #3f8f52; }
+.switch input:checked + .track .knob { transform: translateX(16px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.seg {
+  display: flex;
+  gap: 2px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 2px;
+}
+.seg button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.seg button:hover { color: var(--text); }
+.seg button.active { background: var(--panel-2); color: var(--text); }
+
+.status {
+  margin: 10px 0 12px;
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 15px;
+}
+
+/* 通信失败提示：必须显眼，否则用户只会看到"点了没反应" */
+.status.error {
+  color: #d9534f;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.row { margin-bottom: 12px; }
+.row-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.row-label output { color: var(--text); font-variant-numeric: tabular-nums; }
+
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-2);
+  outline: none;
+  margin: 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 0;
+  cursor: pointer;
+}
+input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(127, 119, 221, .35); }
+
+.site {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+.site-name {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ghost {
+  flex: none;
+  border: 1px solid var(--panel-2);
+  background: transparent;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ghost:hover { background: var(--panel-2); }
+.ghost.on { background: #3f8f52; border-color: #3f8f52; }
+
+footer { display: flex; justify-content: flex-end; }
+.link {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-family: inherit;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+.link:hover { text-decoration: underline; }

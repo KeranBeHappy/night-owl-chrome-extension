@@ -1,0 +1,80 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "version": "1.0.0",
+  "description": "__MSG_extDesc__",
+  "default_locale": "en",
+  "minimum_chrome_version": "102",
+
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "alarms",
+    "contextMenus",
+    "geolocation"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "background": {
+    "service_worker": "src/background.js"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "night-owl@nightowl.local",
+      "strict_min_version": "115.0"
+    }
+  },
+
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "__MSG_extName__",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "options_page": "src/options/options.html",
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "commands": {
+    "nw-toggle-mode": {
+      "suggested_key": {
+        "default": "Alt+Shift+D",
+        "mac": "Alt+Shift+D"
+      },
+      "description": "__MSG_cmdToggleMode__"
+    },
+    "nw-toggle-site": {
+      "description": "__MSG_cmdToggleSite__"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "src/lib/config.js",
+        "src/lib/sun.js",
+        "src/lib/matcher.js",
+        "src/lib/filter.js",
+        "src/content.js"
+      ],
+      "css": ["src/inject.css"],
+      "run_at": "document_start",
+      "all_frames": false,
+      "match_about_blank": true
+    }
+  ]
+}

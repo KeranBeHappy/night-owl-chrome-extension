@@ -1,0 +1,432 @@
+{
+  "extName": {
+    "message": "Night Owl 夜鹰",
+    "description": "扩展名称"
+  },
+  "extDesc": {
+    "message": "为所有网页自动开启夜间模式。支持日出日落定时、亮度与色温调节、站点黑白名单。",
+    "description": "扩展描述"
+  },
+  "cmdToggleMode": {
+    "message": "切换白天 / 黑夜模式",
+    "description": "快捷键说明"
+  },
+  "cmdToggleSite": {
+    "message": "把当前站点加入或移出白名单",
+    "description": "快捷键说明"
+  },
+  "ctxAddWhitelist": {
+    "message": "把此站点加入白名单",
+    "description": "右键菜单"
+  },
+  "ctxRemoveWhitelist": {
+    "message": "把此站点移出白名单",
+    "description": "右键菜单"
+  },
+  "ctxOpenOptions": {
+    "message": "打开 Night Owl 设置",
+    "description": "右键菜单"
+  },
+  "popupMaster": {
+    "message": "Night Owl",
+    "description": "弹窗标题"
+  },
+  "popupAuto": {
+    "message": "自动",
+    "description": "模式"
+  },
+  "popupNight": {
+    "message": "黑夜",
+    "description": "模式"
+  },
+  "popupDay": {
+    "message": "白天",
+    "description": "模式"
+  },
+  "popupBrightness": {
+    "message": "亮度",
+    "description": "滑块"
+  },
+  "popupWarmth": {
+    "message": "色温",
+    "description": "滑块"
+  },
+  "popupCool": {
+    "message": "冷",
+    "description": "滑块低端"
+  },
+  "popupWarm": {
+    "message": "暖",
+    "description": "滑块高端"
+  },
+  "popupThisSite": {
+    "message": "当前站点",
+    "description": "分区标题"
+  },
+  "popupSiteOn": {
+    "message": "此站点已开启夜间模式",
+    "description": "站点状态"
+  },
+  "popupSiteOff": {
+    "message": "此站点已关闭夜间模式",
+    "description": "站点状态"
+  },
+  "popupOpenSettings": {
+    "message": "设置",
+    "description": "链接"
+  },
+  "popupNextSwitch": {
+    "message": "$MIN$ 后切换",
+    "description": "倒计时",
+    "placeholders": {
+      "min": {
+        "content": "$1",
+        "example": "2 小时 15 分"
+      }
+    }
+  },
+  "popupSunTimes": {
+    "message": "日落 $SET$ · 日出 $RISE$",
+    "description": "日出日落",
+    "placeholders": {
+      "set": {
+        "content": "$1",
+        "example": "18:42"
+      },
+      "rise": {
+        "content": "$2",
+        "example": "06:15"
+      }
+    }
+  },
+  "popupDisabled": {
+    "message": "已全局关闭",
+    "description": "总开关关闭"
+  },
+  "popupNotNow": {
+    "message": "当前处于白天时段",
+    "description": "自动模式下当前是白天"
+  },
+  "optTitle": {
+    "message": "Night Owl 设置",
+    "description": "设置页标题"
+  },
+  "tabGeneral": {
+    "message": "常规",
+    "description": "标签页"
+  },
+  "tabAppearance": {
+    "message": "外观",
+    "description": "标签页"
+  },
+  "tabLists": {
+    "message": "站点规则",
+    "description": "标签页"
+  },
+  "tabAdvanced": {
+    "message": "高级",
+    "description": "标签页"
+  },
+  "tabBackup": {
+    "message": "备份",
+    "description": "标签页"
+  },
+  "lblEnabled": {
+    "message": "启用 Night Owl",
+    "description": "总开关"
+  },
+  "hintEnabled": {
+    "message": "关闭后所有网页恢复原始配色。",
+    "description": "说明"
+  },
+  "lblMode": {
+    "message": "模式",
+    "description": "分组标题"
+  },
+  "hintAuto": {
+    "message": "自动会按下方的时间表在白天与黑夜之间切换。",
+    "description": "说明"
+  },
+  "lblSchedule": {
+    "message": "时间表",
+    "description": "分组标题"
+  },
+  "optFollowSun": {
+    "message": "跟随日出日落",
+    "description": "时间表类型"
+  },
+  "optFixedTime": {
+    "message": "固定时段",
+    "description": "时间表类型"
+  },
+  "lblLatitude": {
+    "message": "纬度",
+    "description": "字段"
+  },
+  "lblLongitude": {
+    "message": "经度",
+    "description": "字段"
+  },
+  "hintLatLng": {
+    "message": "十进制度数。北纬、东经为正，南纬、西经为负。示例：31.2304, 121.4737",
+    "description": "说明"
+  },
+  "btnDetect": {
+    "message": "获取我的位置",
+    "description": "按钮"
+  },
+  "detectOk": {
+    "message": "已填入当前位置。",
+    "description": "状态"
+  },
+  "detectLocating": {
+    "message": "正在获取位置…",
+    "description": "状态"
+  },
+  "detectFail": {
+    "message": "无法获取位置，请手动填写。",
+    "description": "状态"
+  },
+  "msgReload": {
+    "message": "扩展已更新，请关闭并重新打开这个页面。",
+    "description": "扩展上下文失效提示"
+  },
+  "cityNear": {
+    "message": "位置：$CITY$（约 $KM$）",
+    "description": "定位后展示的最近城市，$CITY$ 城市名，$KM$ 距离",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Shanghai, CN"
+      },
+      "km": {
+        "content": "$2",
+        "example": "3 km"
+      }
+    }
+  },
+  "cityFar": {
+    "message": "$CITY$（约 $KM$）——附近没有收录城市，请核对坐标",
+    "description": "最近城市过远时的提示",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Urumqi, CN"
+      },
+      "km": {
+        "content": "$2",
+        "example": "180 km"
+      }
+    }
+  },
+  "cityKnown": {
+    "message": "位置：$CITY$",
+    "description": "城市库不可用时的兜底展示",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Shanghai, CN"
+      }
+    }
+  },
+  "lblSunsetOffset": {
+    "message": "入夜时间（日落之后多少分钟）",
+    "description": "字段"
+  },
+  "lblSunriseOffset": {
+    "message": "天亮时间（日出之后多少分钟）",
+    "description": "字段"
+  },
+  "hintOffset": {
+    "message": "填负数可以提前切换。例如 -30 表示日落后提前 30 分钟入夜。",
+    "description": "说明"
+  },
+  "lblStartTime": {
+    "message": "入夜时刻",
+    "description": "字段"
+  },
+  "lblEndTime": {
+    "message": "天亮时刻",
+    "description": "字段"
+  },
+  "grpComputed": {
+    "message": "今日计算结果",
+    "description": "分组标题"
+  },
+  "lblTodaySunset": {
+    "message": "日落",
+    "description": "字段"
+  },
+  "lblTodaySunrise": {
+    "message": "日出",
+    "description": "字段"
+  },
+  "hintPolar": {
+    "message": "你所在的纬度今日没有日出或日落，已改用固定时段。",
+    "description": "说明"
+  },
+  "lblInvert": {
+    "message": "暗度",
+    "description": "滑块"
+  },
+  "hintInvert": {
+    "message": "控制颜色反转的强度。数值越低，夜色越柔和、越偏灰。",
+    "description": "说明"
+  },
+  "lblBrightness": {
+    "message": "亮度",
+    "description": "滑块"
+  },
+  "lblContrast": {
+    "message": "对比度",
+    "description": "滑块"
+  },
+  "lblSaturation": {
+    "message": "饱和度",
+    "description": "滑块"
+  },
+  "lblWarmth": {
+    "message": "色温",
+    "description": "滑块"
+  },
+  "lblGrayscale": {
+    "message": "黑白程度",
+    "description": "滑块"
+  },
+  "btnResetAppearance": {
+    "message": "恢复默认外观",
+    "description": "按钮"
+  },
+  "previewHeading": {
+    "message": "标题文字",
+    "description": "预览"
+  },
+  "previewBody": {
+    "message": "正文放在浅色卡片上，方便你在保存前判断对比度是否合适。",
+    "description": "预览"
+  },
+  "previewButton": {
+    "message": "按钮",
+    "description": "预览"
+  },
+  "lblBlacklistBox": {
+    "message": "黑名单 — 这些网址变暗",
+    "description": "分组标题"
+  },
+  "lblWhitelistBox": {
+    "message": "白名单 — 这些网址不变暗",
+    "description": "分组标题"
+  },
+  "hintBlacklist": {
+    "message": "列表中的网址始终启用夜间模式，即使当前处于白天时段。",
+    "description": "说明"
+  },
+  "hintWhitelist": {
+    "message": "列表中的网址始终保持原始配色，优先级高于黑名单；右键菜单操作的就是它。",
+    "description": "说明"
+  },
+  "btnAdd": {
+    "message": "确定",
+    "description": "按钮"
+  },
+  "btnRemove": {
+    "message": "移除",
+    "description": "按钮"
+  },
+  "listEmpty": {
+    "message": "还没有网址",
+    "description": "空状态"
+  },
+  "rulePlaceholder": {
+    "message": "example.com 或 *.example.com",
+    "description": "输入框提示"
+  },
+  "hintRules": {
+    "message": "example.com 精确匹配域名；*.example.com 同时匹配子域名；https://example.com/mail 匹配指定路径。",
+    "description": "说明"
+  },
+  "lblCurrentSite": {
+    "message": "当前站点",
+    "description": "字段"
+  },
+  "lblPreserveMedia": {
+    "message": "保留图片与视频的原始色彩",
+    "description": "选项"
+  },
+  "hintPreserveMedia": {
+    "message": "图片、视频、画布会被反向还原。若某站点把界面画在 canvas 上，可关闭此项。",
+    "description": "说明"
+  },
+  "lblSkipDark": {
+    "message": "跳过本身已是深色的站点",
+    "description": "选项"
+  },
+  "hintSkipDark": {
+    "message": "自动检测页面背景色，对深色站点不做处理。",
+    "description": "说明"
+  },
+  "lblTarget": {
+    "message": "滤镜应用范围",
+    "description": "选项"
+  },
+  "optHtml": {
+    "message": "整页（推荐）",
+    "description": "选项"
+  },
+  "optBody": {
+    "message": "仅正文区域",
+    "description": "选项"
+  },
+  "hintTarget": {
+    "message": "仅正文可以修复部分站点的吸顶导航栏问题，但页面背景会保持浅色。",
+    "description": "说明"
+  },
+  "btnExport": {
+    "message": "导出设置",
+    "description": "按钮"
+  },
+  "btnImport": {
+    "message": "导入设置",
+    "description": "按钮"
+  },
+  "btnRestore": {
+    "message": "恢复默认",
+    "description": "按钮"
+  },
+  "hintBackup": {
+    "message": "设置会保存为 JSON 文件，可复制到其他电脑或浏览器配置文件。",
+    "description": "说明"
+  },
+  "msgSaved": {
+    "message": "已保存",
+    "description": "提示"
+  },
+  "msgImported": {
+    "message": "设置已导入。",
+    "description": "提示"
+  },
+  "msgImportError": {
+    "message": "该文件无法识别为 Night Owl 设置。",
+    "description": "提示"
+  },
+  "msgRestoreConfirm": {
+    "message": "确定要把所有设置恢复为默认值吗？",
+    "description": "确认"
+  },
+  "lblShortcuts": {
+    "message": "快捷键",
+    "description": "分组标题"
+  },
+  "hintShortcuts": {
+    "message": "前往 chrome://extensions/shortcuts 修改。",
+    "description": "说明"
+  },
+  "optFooter": {
+    "message": "所有功能都在你的浏览器本地运行。无需账号、无需服务器，数据不会离开本机。",
+    "description": "页脚"
+  },
+  "msgNoBackground": {
+    "message": "连不上扩展后台。请到 chrome://extensions 重新加载扩展，然后重新打开本面板。",
+    "description": "扩展后台无响应"
+  }
+}

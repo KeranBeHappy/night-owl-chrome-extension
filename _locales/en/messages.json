@@ -1,0 +1,432 @@
+{
+  "extName": {
+    "message": "Night Owl",
+    "description": "Extension name"
+  },
+  "extDesc": {
+    "message": "Automatic dark mode for every website. Sun-based scheduling, brightness and color temperature, per-site rules.",
+    "description": "Extension description"
+  },
+  "cmdToggleMode": {
+    "message": "Toggle day / night mode",
+    "description": "Shortcut description"
+  },
+  "cmdToggleSite": {
+    "message": "Add or remove the current site from the whitelist",
+    "description": "Shortcut description"
+  },
+  "ctxAddWhitelist": {
+    "message": "Add this site to the whitelist",
+    "description": "Context menu item"
+  },
+  "ctxRemoveWhitelist": {
+    "message": "Remove this site from the whitelist",
+    "description": "Context menu item"
+  },
+  "ctxOpenOptions": {
+    "message": "Open Night Owl settings",
+    "description": "Context menu item"
+  },
+  "popupMaster": {
+    "message": "Night Owl",
+    "description": "Popup header"
+  },
+  "popupAuto": {
+    "message": "Auto",
+    "description": "Mode: auto"
+  },
+  "popupNight": {
+    "message": "Night",
+    "description": "Mode: night"
+  },
+  "popupDay": {
+    "message": "Day",
+    "description": "Mode: day"
+  },
+  "popupBrightness": {
+    "message": "Brightness",
+    "description": "Slider label"
+  },
+  "popupWarmth": {
+    "message": "Warmth",
+    "description": "Slider label"
+  },
+  "popupCool": {
+    "message": "Cool",
+    "description": "Slider low end"
+  },
+  "popupWarm": {
+    "message": "Warm",
+    "description": "Slider high end"
+  },
+  "popupThisSite": {
+    "message": "This site",
+    "description": "Section label"
+  },
+  "popupSiteOn": {
+    "message": "Dark mode on for this site",
+    "description": "Site state"
+  },
+  "popupSiteOff": {
+    "message": "Dark mode off for this site",
+    "description": "Site state"
+  },
+  "popupOpenSettings": {
+    "message": "Settings",
+    "description": "Link to options page"
+  },
+  "popupNextSwitch": {
+    "message": "Next switch in $MIN$",
+    "description": "Countdown",
+    "placeholders": {
+      "min": {
+        "content": "$1",
+        "example": "2 h 15 m"
+      }
+    }
+  },
+  "popupSunTimes": {
+    "message": "Sunset $SET$ · Sunrise $RISE$",
+    "description": "Sun times",
+    "placeholders": {
+      "set": {
+        "content": "$1",
+        "example": "18:42"
+      },
+      "rise": {
+        "content": "$2",
+        "example": "06:15"
+      }
+    }
+  },
+  "popupDisabled": {
+    "message": "Turned off globally",
+    "description": "Master switch off"
+  },
+  "popupNotNow": {
+    "message": "Daytime right now",
+    "description": "Auto mode currently day"
+  },
+  "optTitle": {
+    "message": "Night Owl settings",
+    "description": "Options page title"
+  },
+  "tabGeneral": {
+    "message": "General",
+    "description": "Tab"
+  },
+  "tabAppearance": {
+    "message": "Appearance",
+    "description": "Tab"
+  },
+  "tabLists": {
+    "message": "Site rules",
+    "description": "Tab"
+  },
+  "tabAdvanced": {
+    "message": "Advanced",
+    "description": "Tab"
+  },
+  "tabBackup": {
+    "message": "Backup",
+    "description": "Tab"
+  },
+  "lblEnabled": {
+    "message": "Enable Night Owl",
+    "description": "Master switch"
+  },
+  "hintEnabled": {
+    "message": "Turn this off to see every site in its original colors.",
+    "description": "Hint"
+  },
+  "lblMode": {
+    "message": "Mode",
+    "description": "Group label"
+  },
+  "hintAuto": {
+    "message": "Auto switches between day and night using the schedule below.",
+    "description": "Hint"
+  },
+  "lblSchedule": {
+    "message": "Schedule",
+    "description": "Group label"
+  },
+  "optFollowSun": {
+    "message": "Follow the sun",
+    "description": "Schedule type"
+  },
+  "optFixedTime": {
+    "message": "Fixed hours",
+    "description": "Schedule type"
+  },
+  "lblLatitude": {
+    "message": "Latitude",
+    "description": "Field"
+  },
+  "lblLongitude": {
+    "message": "Longitude",
+    "description": "Field"
+  },
+  "hintLatLng": {
+    "message": "Decimal degrees. North and East are positive, South and West negative. Example: 31.2304, 121.4737",
+    "description": "Hint"
+  },
+  "btnDetect": {
+    "message": "Use my location",
+    "description": "Button"
+  },
+  "detectOk": {
+    "message": "Location filled in.",
+    "description": "Status"
+  },
+  "detectLocating": {
+    "message": "Locating…",
+    "description": "Status"
+  },
+  "detectFail": {
+    "message": "Could not get your location. Enter it manually.",
+    "description": "Status"
+  },
+  "msgReload": {
+    "message": "The extension was updated. Close and reopen this page.",
+    "description": "Stale extension context notice"
+  },
+  "cityNear": {
+    "message": "Position: $CITY$ (~$KM$)",
+    "description": "Nearest city shown after locating",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Shanghai, CN"
+      },
+      "km": {
+        "content": "$2",
+        "example": "3 km"
+      }
+    }
+  },
+  "cityFar": {
+    "message": "$CITY$ (~$KM$) — no city on file nearby, please check the coordinates",
+    "description": "Nearest city is far away",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Urumqi, CN"
+      },
+      "km": {
+        "content": "$2",
+        "example": "180 km"
+      }
+    }
+  },
+  "cityKnown": {
+    "message": "Position: $CITY$",
+    "description": "Fallback when the city dataset is unavailable",
+    "placeholders": {
+      "city": {
+        "content": "$1",
+        "example": "Shanghai, CN"
+      }
+    }
+  },
+  "lblSunsetOffset": {
+    "message": "Night starts (minutes after sunset)",
+    "description": "Field"
+  },
+  "lblSunriseOffset": {
+    "message": "Night ends (minutes after sunrise)",
+    "description": "Field"
+  },
+  "hintOffset": {
+    "message": "Negative values switch earlier. For example -30 starts night 30 minutes before sunset.",
+    "description": "Hint"
+  },
+  "lblStartTime": {
+    "message": "Night starts at",
+    "description": "Field"
+  },
+  "lblEndTime": {
+    "message": "Night ends at",
+    "description": "Field"
+  },
+  "grpComputed": {
+    "message": "Computed for today",
+    "description": "Group label"
+  },
+  "lblTodaySunset": {
+    "message": "Sunset",
+    "description": "Field"
+  },
+  "lblTodaySunrise": {
+    "message": "Sunrise",
+    "description": "Field"
+  },
+  "hintPolar": {
+    "message": "Your latitude has no sunrise or sunset today. Night Owl is using the fixed hours instead.",
+    "description": "Hint"
+  },
+  "lblInvert": {
+    "message": "Darkness",
+    "description": "Slider"
+  },
+  "hintInvert": {
+    "message": "How far colors are inverted. Lower values give a softer, greyer night.",
+    "description": "Hint"
+  },
+  "lblBrightness": {
+    "message": "Brightness",
+    "description": "Slider"
+  },
+  "lblContrast": {
+    "message": "Contrast",
+    "description": "Slider"
+  },
+  "lblSaturation": {
+    "message": "Saturation",
+    "description": "Slider"
+  },
+  "lblWarmth": {
+    "message": "Color temperature",
+    "description": "Slider"
+  },
+  "lblGrayscale": {
+    "message": "Grayscale",
+    "description": "Slider"
+  },
+  "btnResetAppearance": {
+    "message": "Reset appearance",
+    "description": "Button"
+  },
+  "previewHeading": {
+    "message": "Heading text",
+    "description": "Preview"
+  },
+  "previewBody": {
+    "message": "Body text sits on a light card so you can judge contrast before saving.",
+    "description": "Preview"
+  },
+  "previewButton": {
+    "message": "Button",
+    "description": "Preview"
+  },
+  "lblBlacklistBox": {
+    "message": "Blacklist — these sites go dark",
+    "description": "Group label"
+  },
+  "lblWhitelistBox": {
+    "message": "Whitelist — these sites stay as they are",
+    "description": "Group label"
+  },
+  "hintBlacklist": {
+    "message": "Sites here always use dark mode, even in daytime hours.",
+    "description": "Hint"
+  },
+  "hintWhitelist": {
+    "message": "Sites here always keep their original colors. This outranks the blacklist, and it is what the right-click menu edits.",
+    "description": "Hint"
+  },
+  "btnAdd": {
+    "message": "Add",
+    "description": "Button"
+  },
+  "btnRemove": {
+    "message": "Remove",
+    "description": "Button"
+  },
+  "listEmpty": {
+    "message": "No sites yet.",
+    "description": "Empty state"
+  },
+  "rulePlaceholder": {
+    "message": "example.com or *.example.com",
+    "description": "Placeholder"
+  },
+  "hintRules": {
+    "message": "example.com matches exactly. *.example.com also matches subdomains. https://example.com/mail matches a path.",
+    "description": "Hint"
+  },
+  "lblCurrentSite": {
+    "message": "Current site",
+    "description": "Field label"
+  },
+  "lblPreserveMedia": {
+    "message": "Keep photos and videos in original colors",
+    "description": "Option"
+  },
+  "hintPreserveMedia": {
+    "message": "Images, videos and canvas are inverted back. Turn off if a site renders its UI inside a canvas.",
+    "description": "Hint"
+  },
+  "lblSkipDark": {
+    "message": "Skip sites that are already dark",
+    "description": "Option"
+  },
+  "hintSkipDark": {
+    "message": "Detects the page background and leaves dark sites untouched.",
+    "description": "Hint"
+  },
+  "lblTarget": {
+    "message": "Apply filter to",
+    "description": "Option"
+  },
+  "optHtml": {
+    "message": "Whole page (recommended)",
+    "description": "Option"
+  },
+  "optBody": {
+    "message": "Body only",
+    "description": "Option"
+  },
+  "hintTarget": {
+    "message": "Body only can fix sticky headers on some sites, but leaves the page background light.",
+    "description": "Hint"
+  },
+  "btnExport": {
+    "message": "Export settings",
+    "description": "Button"
+  },
+  "btnImport": {
+    "message": "Import settings",
+    "description": "Button"
+  },
+  "btnRestore": {
+    "message": "Restore defaults",
+    "description": "Button"
+  },
+  "hintBackup": {
+    "message": "Settings are saved as a JSON file you can copy to another computer or browser profile.",
+    "description": "Hint"
+  },
+  "msgSaved": {
+    "message": "Saved",
+    "description": "Toast"
+  },
+  "msgImported": {
+    "message": "Settings imported.",
+    "description": "Toast"
+  },
+  "msgImportError": {
+    "message": "That file could not be read as Night Owl settings.",
+    "description": "Toast"
+  },
+  "msgRestoreConfirm": {
+    "message": "Reset every setting back to the default?",
+    "description": "Confirm"
+  },
+  "lblShortcuts": {
+    "message": "Keyboard shortcuts",
+    "description": "Group label"
+  },
+  "hintShortcuts": {
+    "message": "Open chrome://extensions/shortcuts to change them.",
+    "description": "Hint"
+  },
+  "optFooter": {
+    "message": "Everything runs locally in your browser. No account, no server, no data leaves this device.",
+    "description": "Footer"
+  },
+  "msgNoBackground": {
+    "message": "Cannot reach the extension background. Reload the extension on chrome://extensions, then reopen this panel.",
+    "description": "Background service worker did not answer"
+  }
+}

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="head">
+    <div class="brand">
+      <span class="moon" aria-hidden="true"></span>
+      <h1 data-i18n="popupMaster"></h1>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="master">
+      <span class="track"><span class="knob"></span></span>
+    </label>
+  </header>
+
+  <div class="seg" id="modeSeg" role="group">
+    <button type="button" data-mode="auto" data-i18n="popupAuto"></button>
+    <button type="button" data-mode="dark" data-i18n="popupNight"></button>
+    <button type="button" data-mode="light" data-i18n="popupDay"></button>
+  </div>
+
+  <p class="status" id="status"></p>
+
+  <div class="row">
+    <div class="row-label">
+      <span data-i18n="popupBrightness"></span>
+      <output id="brightnessOut">100%</output>
+    </div>
+    <input type="range" id="brightness" min="40" max="150" step="1">
+  </div>
+
+  <div class="row">
+    <div class="row-label">
+      <span data-i18n="popupWarmth"></span>
+      <output id="temperatureOut">0</output>
+    </div>
+    <input type="range" id="temperature" min="-100" max="100" step="1">
+  </div>
+
+  <div class="site">
+    <span class="site-name" id="siteName">—</span>
+    <button type="button" class="ghost" id="siteToggle"></button>
+  </div>
+
+  <footer>
+    <button type="button" class="link" id="openOptions" data-i18n="popupOpenSettings"></button>
+  </footer>
+
+  <script src="../lib/config.js"></script>
+  <script src="../lib/sun.js"></script>
+  <script src="../lib/matcher.js"></script>
+  <script src="../lib/store.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

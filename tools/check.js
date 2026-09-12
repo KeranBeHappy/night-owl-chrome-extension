@@ -208,6 +208,56 @@ console.log('[5] Site toggle');
   (c4.lists.whitelist.length === 1 && c4.lists.blacklist.length === 0)
     ? ok('whitelist add clears blacklist rule')
     : bad('mutual exclusion', JSON.stringify(c4.lists));
+
+  // 三态：follow / dark / light 互斥，且能从名单回到 follow
+  var c5 = C.normalize({ lists: { blacklist: [], whitelist: [] } });
+  M.setSiteMode(c5, URL_A, 'dark');
+  (M.siteMode(c5, URL_A) === 'dark' && c5.lists.blacklist.length === 1)
+    ? ok('三态：强制夜间 -> 黑名单') : bad('三态 dark', JSON.stringify(c5.lists));
+  M.setSiteMode(c5, URL_A, 'light');
+  (M.siteMode(c5, URL_A) === 'light' && c5.lists.blacklist.length === 0 && c5.lists.whitelist.length === 1)
+    ? ok('三态：强制白天 -> 白名单（黑名单已清）') : bad('三态 light', JSON.stringify(c5.lists));
+  M.setSiteMode(c5, URL_A, 'follow');
+  (M.siteMode(c5, URL_A) === 'follow' && c5.lists.blacklist.length + c5.lists.whitelist.length === 0)
+    ? ok('三态：跟随自动 -> 两个名单都清空') : bad('三态 follow', JSON.stringify(c5.lists));
+})();
+
+/* ---------- 5b. 手动模式的自动恢复 ----------
+ * 手动选黑夜/白天不再永久锁死：记下下一个自然切换点作为失效时刻。
+ * 到期后 shouldBeDark 与 normalize 都会自动回落 auto（闹钟缺席也自愈）。
+ */
+console.log('[5b] manual mode auto-recovery');
+(function () {
+  var c = C.normalize({ mode: 'dark', schedule: { type: 'time', start: '19:00', end: '07:00' } });
+  c.manualUntil = Date.now() + 3600000;   // 1 小时后才失效
+  S.shouldBeDark(c) === true
+    ? ok('手动黑夜未到期：保持黑夜') : bad('手动未到期', 'expected dark');
+
+  // 过期后必须回落到"与自动完全一致"的判定，而不是继续手动
+  var autoC = C.normalize({ schedule: { type: 'time', start: '19:00', end: '07:00' } });
+  var autoDark = S.shouldBeDark(autoC);
+  c.manualUntil = Date.now() - 1000;
+  S.shouldBeDark(c) === autoDark
+    ? ok('手动已过期：回落为自动判定 (' + (autoDark ? 'dark' : 'light') + ')')
+    : bad('手动过期自愈', 'manual=' + S.shouldBeDark(c) + ' auto=' + autoDark);
+
+  var c2 = C.normalize({ mode: 'dark', manualUntil: Date.now() - 1000 });
+  (c2.mode === 'auto' && c2.manualUntil === 0)
+    ? ok('normalize 清除过期手动模式') : bad('normalize 过期', JSON.stringify({ m: c2.mode, u: c2.manualUntil }));
+
+  var c3 = C.normalize({ mode: 'auto' });
+  C.setManualMode(c3, 'light', Date.now() + 60000);
+  (c3.mode === 'light' && c3.manualUntil > 0)
+    ? ok('setManualMode 记录失效时刻') : bad('setManualMode', JSON.stringify(c3));
+
+  // 手动模式下也要给出下一次切换点，闹钟靠它排程
+  var n = S.nextSwitch(c3);
+  (n && typeof n.at === 'number' && n.minutes > 0)
+    ? ok('nextSwitch 手动模式返回切换点') : bad('nextSwitch 手动', JSON.stringify(n));
+
+  C.setManualMode(c3, 'auto', 0);
+  (c3.mode === 'auto' && c3.manualUntil === 0)
+    ? ok('setManualMode(auto) 清除失效时刻') : bad('setManualMode auto', JSON.stringify(c3));
 })();
 
 /* ---------- 6. background.js in a simulated service worker ---------- */
@@ -216,7 +266,8 @@ console.log('[6] background.js');
 function runBackground(opts) {
   var listeners = {};
   var sent = [];         // 记录 tabs.sendMessage，用于验证"广播是否真的发出去了"
-  var stored = { config: {} };
+  var stored = { config: (opts && opts.seedConfig) ? opts.seedConfig : {} };
+  var badge = { text: null };   // 记录 setBadgeText，用于验证徽标语义
   /* breakApi: make one specific addListener throw, to prove that a single
    * failed registration cannot take down the listeners registered after it. */
   var broken = opts && opts.breakApi ? String(opts.breakApi).split('.') : null;
@@ -274,7 +325,10 @@ function runBackground(opts) {
       refresh: function () {},
       onClicked: on('onClicked')
     },
-    action: { setBadgeText: function () {}, setBadgeBackgroundColor: function () {} },
+    action: {
+      setBadgeText: function (o) { badge.text = o && o.text; },
+      setBadgeBackgroundColor: function () {}
+    },
     scripting: { executeScript: function () { return Promise.resolve(); } },
     i18n: { getMessage: function (k) { return k; } }
   };
@@ -320,7 +374,7 @@ function runBackground(opts) {
 
   var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'onShown', 'onClicked', 'onMessage', 'storageChanged'];
   var missing = want.filter(function (k) { return typeof listeners[k] !== 'function'; });
-  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
+  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
 }
 
 (function () {
@@ -448,6 +502,19 @@ function runBackground(opts) {
       });
     });
   })();
+
+  /* 徽标语义：黑夜 ON，白天 OFF（不再白天留空） */
+  (function () {
+    var CC = require(path.join(ROOT, 'src/lib/config.js'));
+    var day = runBackground({ native: true, seedConfig: CC.normalize({ mode: 'light' }) });
+    var night = runBackground({ native: true, seedConfig: CC.normalize({ mode: 'dark' }) });
+    var off = runBackground({ native: true, seedConfig: CC.normalize({ enabled: false }) });
+    flush(function () {
+      (day.badge.text === 'OFF') ? ok('徽标：白天模式 -> OFF') : bad('徽标白天', String(day.badge.text));
+      (night.badge.text === 'ON') ? ok('徽标：黑夜模式 -> ON') : bad('徽标黑夜', String(night.badge.text));
+      (off.badge.text === 'OFF') ? ok('徽标：总开关关闭 -> OFF') : bad('徽标关闭', String(off.badge.text));
+    });
+  })();
 })();
 
 console.log('[7] i18n keys');
@@ -566,19 +633,31 @@ afterSections(function () {
           contains: function (c) { return !!this._s[c]; }
         },
         addEventListener: function (ev, fn) { this._h = this._h || {}; this._h[ev] = fn; },
+        /* 真 DOM 的 .click() 会带上 currentTarget；夹具也补上，
+         * 否则依赖 e.currentTarget 的处理器会被喂 undefined。 */
+        click: function () {
+          var fn = this._h && this._h.click;
+          if (fn) fn({ currentTarget: this, target: this });
+        },
         appendChild: function (c) { this.children.push(c); return c; },
         getAttribute: function (a) { return this._attrs && this._attrs[a]; },
         querySelector: function () { return null; }
       };
     }
-    ['master', 'status', 'brightness', 'brightnessOut', 'temperature',
-     'temperatureOut', 'siteName', 'siteToggle', 'openOptions'].forEach(function (id) {
+    ['status', 'brightness', 'brightnessOut', 'temperature',
+     'temperatureOut', 'siteName', 'openOptions'].forEach(function (id) {
       nodes[id] = el('div');
       nodes[id].id = id;
     });
     var modeBtns = ['auto', 'dark', 'light'].map(function (m) {
       var b = el('button');
       b._attrs = { 'data-mode': m };
+      return b;
+    });
+    /* 站点三态按钮：follow / dark / light（对应 popup.html #siteSeg） */
+    var siteBtns = ['follow', 'dark', 'light'].map(function (m) {
+      var b = el('button');
+      b._attrs = { 'data-site': m };
       return b;
     });
     var siteRow = el('div');
@@ -588,12 +667,13 @@ afterSections(function () {
       querySelector: function (sel) { return sel === '.site' ? siteRow : null; },
       querySelectorAll: function (sel) {
         if (sel === '#modeSeg button') return modeBtns;
+        if (sel === '#siteSeg button') return siteBtns;
         return [];
       },
       createElement: el,
       body: el('body')
     };
-    return { doc: doc, nodes: nodes, modeBtns: modeBtns, siteRow: siteRow };
+    return { doc: doc, nodes: nodes, modeBtns: modeBtns, siteBtns: siteBtns, siteRow: siteRow };
   }
 
   /* ---- 存储夹具：真的存、真的读，能触发 onChanged ---- */
@@ -626,6 +706,7 @@ afterSections(function () {
     if (opts.seed) st.data.config = opts.seed;
 
     var sendCalls = [];
+    var badge = { text: null, color: null };
     var chrome = {
       runtime: {
         id: 'test',
@@ -642,6 +723,10 @@ afterSections(function () {
           }
           if (cb) cb({ ok: true });
         }
+      },
+      action: {
+        setBadgeText: function (o) { badge.text = o && o.text; },
+        setBadgeBackgroundColor: function (o) { badge.color = o && o.color; }
       },
       storage: {
         local: st.local,
@@ -671,7 +756,7 @@ afterSections(function () {
     });
     new vm.Script(read('src/popup/popup.js'), { filename: 'popup.js' }).runInContext(box);
 
-    return { box: box, fix: fix, st: st, sendCalls: sendCalls, chrome: chrome };
+    return { box: box, fix: fix, st: st, sendCalls: sendCalls, chrome: chrome, badge: badge };
   }
 
   // (a) store.js 基本读写
@@ -730,13 +815,13 @@ afterSections(function () {
           ? ok('onMessage 死：落盘成功且无错误提示')
           : bad('落盘后误报', '状态行报错');
 
-        p.fix.nodes.siteToggle._h.click();
+        p.fix.siteBtns[1].click();   // 强制夜间 -> 黑名单
         flush(function () {
           var lists = p.st.data.config && p.st.data.config.lists;
           var total = lists ? lists.blacklist.length + lists.whitelist.length : 0;
-          (total === 1)
-            ? ok('onMessage 死：站点开关已落盘（1 条规则）')
-            : bad('站点开关落盘', JSON.stringify(lists));
+          (total === 1 && lists.blacklist.length === 1)
+            ? ok('onMessage 死：站点三态已落盘（黑名单 1 条）')
+            : bad('站点三态落盘', JSON.stringify(lists));
         });
       });
     });
@@ -751,6 +836,81 @@ afterSections(function () {
       bg.sent.indexOf('nw:tick') >= 0
         ? ok('storage.onChanged 触发广播（UI 直写也能让页面跟着变）')
         : bad('storage 广播', '未发出 nw:tick；sent=' + JSON.stringify(bg.sent));
+    });
+  })();
+
+  // (f) popup 点击模式 -> 徽标同帧翻转（不等落盘，更不等后台）
+  (function () {
+    var CC = require(path.join(ROOT, 'src/lib/config.js'));
+    var p = runPopup({ seed: CC.normalize({ mode: 'dark' }), messagingAvailable: false });
+    flush(function () {
+      (p.badge.text === 'ON')
+        ? ok('popup 打开面板即校准徽标：黑夜 -> ON')
+        : bad('popup 徽标校准', String(p.badge.text));
+
+      p.fix.modeBtns[2].click();   // 切到白天
+      (p.badge.text === 'OFF')
+        ? ok('点击白天：徽标同帧变 OFF（不等落盘与后台）')
+        : bad('白天徽标同帧', String(p.badge.text));
+
+      p.fix.modeBtns[1].click();   // 再切回黑夜
+      (p.badge.text === 'ON')
+        ? ok('点击黑夜：徽标同帧变 ON')
+        : bad('黑夜徽标同帧', String(p.badge.text));
+    });
+  })();
+
+  // (g) 后台 storage.onChanged 路径的徽标更新（先徽标后排程，排程出错不连累徽标）
+  (function () {
+    var CC = require(path.join(ROOT, 'src/lib/config.js'));
+    var bg = runBackground({ native: true, seedConfig: CC.normalize({ mode: 'dark' }) });
+    flush(function () {
+      (bg.badge.text === 'ON')
+        ? ok('后台启动：黑夜徽标 ON')
+        : bad('后台徽标 ON', String(bg.badge.text));
+
+      bg.listeners.storageChanged({
+        config: { newValue: CC.normalize({ mode: 'light' }), oldValue: null }
+      }, 'local');
+      flush(function () {
+        (bg.badge.text === 'OFF')
+          ? ok('storage.onChanged -> 徽标 OFF（先徽标后排程）')
+          : bad('storage 徽标', String(bg.badge.text));
+      });
+    });
+  })();
+
+  // (h) nw:saved 必须采用消息自带的配置，不能重读 storage
+  // （真机实证：本机 Chrome 其它上下文刚 set 完，SW 侧立刻 get 拿到的是
+  //   "上一次"的旧值 —— 点白天后事件里是 light，紧随的 get 却是 dark，
+  //   旧实现 loadConfig() 重读就把徽标写回 ON。这里用恒返回 dark 的
+  //   get 夹具复刻该怪癖。）
+  (function () {
+    var CC = require(path.join(ROOT, 'src/lib/config.js'));
+    var bg = runBackground({ native: true, seedConfig: CC.normalize({ mode: 'dark' }) });
+    var stale = false;
+    flush(function () {
+      // 先让后台启动链落定，再模拟"刚写完 light 立刻通知后台"
+      (bg.badge.text === 'ON')
+        ? ok('后台启动：黑夜徽标 ON（nw:saved 前置）')
+        : bad('后台徽标 ON', String(bg.badge.text));
+
+      bg.box.chrome.storage.local.get = function (k, cb) {
+        stale = true; cb({ config: CC.normalize({ mode: 'dark' }) });
+      };
+      bg.listeners.onMessage({ type: 'nw:saved', config: CC.normalize({ mode: 'light' }) }, {}, function () {});
+      (bg.badge.text === 'OFF')
+        ? ok('nw:saved 采用消息配置：徽标同帧 OFF')
+        : bad('nw:saved 徽标', String(bg.badge.text));
+
+      flush(function () {
+        (bg.badge.text === 'OFF')
+          ? ok('nw:saved 徽标不被后续异步链改写')
+          : bad('nw:saved 徽标被改写', String(bg.badge.text));
+        (!stale)
+          ? ok('nw:saved 未触发 storage 重读（消息配置直达）')
+          : bad('nw:saved 重读', '本机 get 有写一拍滞后，禁止回读');
+      });
     });
   })();
 });
@@ -839,6 +999,167 @@ afterSections(function () {
   (FC.buildMedia(offSatCfg.theme, offSatCfg) === 'none')
     ? ok('保留关：无饱和补偿（媒体规则不存在）')
     : bad('保留关饱和', '媒体规则应为 none');
+});
+
+/* [11] content.js 消息通道（tick 优先采用消息配置，缺失才回读 storage）
+ *
+ * 真机复现（tools/badge.e2e.js）确认的机器怪癖：其它上下文刚
+ * chrome.storage.local.set 完，本上下文立刻 get 会拿到"上一次"的旧值
+ * （写一拍滞后）。所以收到 tick 时消息里的配置（后台取自 storage.onChanged
+ * 事件的新值）反而比回读更可靠；只有没带配置时才回读 storage。
+ * （nw:apply 预览语义不变：直接应用消息配置。）
+ */
+afterSections(function () {
+  console.log('[11] content.js 抗回退（stale 消息不得回退页面）');
+  var CC = require(path.join(ROOT, 'src/lib/config.js'));
+  var darkCfg = CC.normalize({ mode: 'dark' });
+  var lightCfg = CC.normalize({ mode: 'light' });
+
+  /* 与 [9] 段的 makeStorage 同款（那边是闭包局部，这里复用不了） */
+  function makeStorage() {
+    var data = {};
+    var subs = [];
+    return {
+      data: data,
+      subs: subs,
+      local: {
+        get: function (key, cb) { var r = {}; r[key] = data[key]; cb(r); },
+        set: function (obj, cb) {
+          var changes = {};
+          Object.keys(obj).forEach(function (k) {
+            changes[k] = { oldValue: data[k], newValue: obj[k] };
+            data[k] = obj[k];
+          });
+          if (cb) cb();
+          subs.forEach(function (fn) { fn(changes, 'local'); });
+        }
+      }
+    };
+  }
+
+  function makeContentEnv(seedConfig) {
+    var st = makeStorage();
+    if (seedConfig) st.data.config = seedConfig;
+
+    function el(tag) {
+      return {
+        tagName: tag, style: {}, textContent: '', id: '', type: '',
+        children: [], isConnected: true, className: '',
+        classList: {
+          _s: {},
+          add: function (c) { this._s[c] = 1; },
+          remove: function (c) { delete this._s[c]; },
+          toggle: function (c, on) {
+            if (on === undefined) on = !this._s[c];
+            if (on) this._s[c] = 1; else delete this._s[c];
+          },
+          contains: function (c) { return !!this._s[c]; }
+        },
+        appendChild: function (c) { this.children.push(c); return c; }
+      };
+    }
+
+    var root = el('html'), head = el('head'), body = el('body');
+    var ssStore = {};
+    var rafQueue = [];
+    var msgListeners = [];
+    var chromeFake = {
+      runtime: {
+        lastError: null,
+        onMessage: { addListener: function (fn) { msgListeners.push(fn); } }
+      },
+      storage: {
+        local: st.local,
+        onChanged: { addListener: function (fn) { st.subs.push(fn); } }
+      }
+    };
+
+    var box = {
+      console: console, Promise: Promise, Date: Date, Math: Math, JSON: JSON,
+      Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
+      isFinite: isFinite, parseInt: parseInt, parseFloat: parseFloat,
+      setTimeout: setTimeout, clearTimeout: clearTimeout,
+      /* rAF 手动排队：深色站点检测的时序由测试显式推进 */
+      requestAnimationFrame: function (fn) { rafQueue.push(fn); return rafQueue.length; },
+      /* 夹具页面无背景色 -> 检测走完 6 层后返回 false（确定性路径） */
+      getComputedStyle: function () { return { backgroundColor: '' }; },
+      chrome: chromeFake,
+      location: { hostname: 'example.com', href: 'https://example.com/page' },
+      sessionStorage: {
+        getItem: function (k) {
+          return Object.prototype.hasOwnProperty.call(ssStore, k) ? ssStore[k] : null;
+        },
+        setItem: function (k, v) { ssStore[k] = String(v); },
+        removeItem: function (k) { delete ssStore[k]; }
+      },
+      document: {
+        documentElement: root, head: head, body: body,
+        getElementById: function () { return null; },
+        createElement: el,
+        addEventListener: function () {}
+      }
+    };
+    box.window = box; box.globalThis = box;
+    vm.createContext(box);
+
+    ['config', 'sun', 'matcher', 'filter'].forEach(function (n) {
+      new vm.Script(read('src/lib/' + n + '.js'), { filename: n + '.js' }).runInContext(box);
+    });
+    new vm.Script(read('src/content.js'), { filename: 'content.js' }).runInContext(box);
+
+    return {
+      st: st, root: root, chrome: chromeFake, rafQueue: rafQueue,
+      isDark: function () { return root.classList.contains('nw-dark'); },
+      runRaf: function () { rafQueue.splice(0).forEach(function (fn) { fn(); }); },
+      dispatch: function (msg) { msgListeners.forEach(function (fn) { fn(msg, {}, function () {}); }); },
+      tick: function (raw) { box.__nightOwlTick(raw); }
+    };
+  }
+
+  // (a) 启动即按 storage 应用：黑夜配置 -> 页面变黑
+  var env = makeContentEnv(darkCfg);
+  env.runRaf();   // skipDarkSites 默认开：首轮深色站点检测排队在 rAF 里
+  env.isDark()
+    ? ok('content 启动：storage 黑夜 -> 页面 nw-dark')
+    : bad('content 启动', '应为暗');
+
+  // (b) storage 变白 -> 页面立即脱掉 nw-dark（storage.onChanged 主通道）
+  env.st.local.set({ config: lightCfg }, function () {});
+  (!env.isDark())
+    ? ok('storage 变白天 -> 页面立即变白')
+    : bad('storage 白天', '仍为暗');
+
+  // (c) tick 携带配置 -> 直接采用（消息配置来自后台的事件新值，最可靠）
+  env.dispatch({ type: 'nw:tick', config: lightCfg });
+  (!env.isDark())
+    ? ok('tick 携带 light 配置：页面保持白天')
+    : bad('tick 配置', '应为亮');
+
+  // (d) 补注入 __nightOwlTick()（无配置）-> 回读 storage，保持白天
+  env.tick();
+  (!env.isDark())
+    ? ok('补注入 __nightOwlTick（无配置）：回读 storage 保持白天')
+    : bad('补注入回读', '应为亮');
+
+  // (e) tick 不带配置且 storage 读取失败 -> 保持现状（绝无回退）
+  var env2 = makeContentEnv(lightCfg);
+  env2.runRaf();
+  var realGet = env2.st.local.get;
+  env2.st.local.get = function (key, cb) {
+    env2.chrome.runtime.lastError = { message: 'Extension context invalidated.' };
+    cb(undefined);
+    env2.chrome.runtime.lastError = null;
+  };
+  env2.dispatch({ type: 'nw:tick' });
+  (!env2.isDark())
+    ? ok('tick 无配置且读取失败：页面保持白天（不回退）')
+    : bad('读取失败回退', '被旧状态打回黑夜');
+  env2.st.local.get = realGet;
+  // 读取恢复后一次正常 tick -> 回到 storage 最新值（白天）
+  env2.dispatch({ type: 'nw:tick' });
+  (!env2.isDark())
+    ? ok('读取恢复后 tick：页面回到白天')
+    : bad('读取恢复', '仍为暗');
 });
 
 finish();

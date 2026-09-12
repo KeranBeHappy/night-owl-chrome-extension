@@ -14,6 +14,15 @@
 
 * { box-sizing: border-box; }
 
+/* 滚动条：默认样式是亮色的，还带一对突兀的箭头按钮，在暗色主题的窗口右缘
+ * 非常扎眼（曾被当成"多出来的控件"）。统一换成细窄的暗色滚动条并隐藏箭头。 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--panel-2); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--line); }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 body {
   margin: 0;
   padding: 28px 20px 60px;
@@ -79,7 +88,9 @@ h1 { font-size: 17px; font-weight: 500; margin: 0; }
   border-bottom: 1px solid var(--line);
   margin-bottom: 18px;
   overflow-x: auto;
+  scrollbar-width: none;          /* 标签页用滚轮/拖动即可，不显示横向滚动条 */
 }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs button {
   border: 0;
   background: transparent;

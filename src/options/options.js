@@ -59,6 +59,19 @@
     if (bar) bar.style.display = 'none';
   }
 
+  /* 徽标不依赖后台：扩展页面自己就能写 chrome.action（与 popup/background
+   * 的 updateBadge 语义一致）。本机 runtime.onMessage 不注册，nw:saved
+   * 提示可能到不了后台，落盘成功后自己把徽标改成一致状态最可靠。 */
+  function syncBadge(c) {
+    if (!c || !SUN) return;
+    try {
+      var on = !!c.enabled && SUN.shouldBeDark(c);
+      chrome.action.setBadgeText({ text: on ? 'ON' : 'OFF' });
+      chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
+      console.debug('[Night Owl] badge ->', on ? 'ON' : 'OFF', '(options)');
+    } catch (e) { /* action API 不可用时只能靠后台，静默即可 */ }
+  }
+
   function save(quiet) {
     echoGuard++;
     config = CFG.normalize(config);
@@ -67,6 +80,7 @@
       bgOk();
       if (!quiet) toast(msg('msgSaved'));
       renderComputed();
+      syncBadge(config);   // 落盘成功即同步徽标，不等后台
       // 尽力通知后台刷新角标；失败无所谓，落盘已经完成
       STORE.nudge({ type: 'nw:saved', config: config });
     }).catch(function (e) {
@@ -80,6 +94,7 @@
       bgOk();
       config = CFG.normalize(raw);
       render();
+      syncBadge(config);   // 打开设置页时顺手校准可能陈旧的徽标
       /* 配置就绪后才绑定事件，避免空指针。
        * 之前用 setInterval(30ms) 轮询 config —— 每 30ms 一次定时器常驻直到
        * config 就绪，浪费且落后于"事件驱动"。改成"load 成功后一次性绑定"。 */
@@ -358,7 +373,10 @@
     var modeBtns = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < modeBtns.length; i++) {
       modeBtns[i].addEventListener('click', function (e) {
-        config.mode = e.currentTarget.getAttribute('data-mode');
+        /* 手动选黑夜/白天时记录下一个自然切换点作为失效时刻，到点自动回到自动。 */
+        var next = SUN.nextSwitch(config);
+        CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);
+        syncBadge(config);   // 徽标与点击同帧翻转，不等落盘与后台
         setSeg('modeSeg', 'mode', config.mode);
         save();
       });

@@ -63,13 +63,37 @@
     "message": "This site",
     "description": "Section label"
   },
-  "popupSiteOn": {
-    "message": "Dark mode on for this site",
-    "description": "Site state"
+  "popupSiteFollow": {
+    "message": "Auto",
+    "description": "Site tri-state: follow global"
   },
-  "popupSiteOff": {
-    "message": "Dark mode off for this site",
-    "description": "Site state"
+  "popupSiteDark": {
+    "message": "Night",
+    "description": "Site tri-state: force dark"
+  },
+  "popupSiteLight": {
+    "message": "Day",
+    "description": "Site tri-state: force light"
+  },
+  "popupManual": {
+    "message": "Manual: $MODE$",
+    "description": "Manual mode state",
+    "placeholders": {
+      "mode": {
+        "content": "$1",
+        "example": "Night"
+      }
+    }
+  },
+  "popupManualUntil": {
+    "message": "back to Auto in $MIN$",
+    "description": "Manual mode countdown",
+    "placeholders": {
+      "min": {
+        "content": "$1",
+        "example": "2 h 15 m"
+      }
+    }
   },
   "popupOpenSettings": {
     "message": "Settings",
@@ -144,7 +168,7 @@
     "description": "Group label"
   },
   "hintAuto": {
-    "message": "Auto switches between day and night using the schedule below.",
+    "message": "Auto switches between day and night using the schedule below. Picking Night or Day manually is a temporary override that reverts to Auto at the next switch.",
     "description": "Hint"
   },
   "lblSchedule": {

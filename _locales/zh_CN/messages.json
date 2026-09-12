@@ -63,13 +63,37 @@
     "message": "当前站点",
     "description": "分区标题"
   },
-  "popupSiteOn": {
-    "message": "此站点已开启夜间模式",
-    "description": "站点状态"
+  "popupSiteFollow": {
+    "message": "跟随",
+    "description": "站点三态：跟随全局自动"
   },
-  "popupSiteOff": {
-    "message": "此站点已关闭夜间模式",
-    "description": "站点状态"
+  "popupSiteDark": {
+    "message": "黑夜",
+    "description": "站点三态：强制夜间"
+  },
+  "popupSiteLight": {
+    "message": "白天",
+    "description": "站点三态：强制白天"
+  },
+  "popupManual": {
+    "message": "手动：$MODE$",
+    "description": "手动模式状态",
+    "placeholders": {
+      "mode": {
+        "content": "$1",
+        "example": "黑夜"
+      }
+    }
+  },
+  "popupManualUntil": {
+    "message": "$MIN$ 后恢复自动",
+    "description": "手动模式倒计时",
+    "placeholders": {
+      "min": {
+        "content": "$1",
+        "example": "2 小时 15 分"
+      }
+    }
   },
   "popupOpenSettings": {
     "message": "设置",
@@ -144,7 +168,7 @@
     "description": "分组标题"
   },
   "hintAuto": {
-    "message": "自动会按下方的时间表在白天与黑夜之间切换。",
+    "message": "自动会按下方的时间表在白天与黑夜之间切换；手动选黑夜或白天只是临时覆盖，到下一个切换点会自动恢复。",
     "description": "说明"
   },
   "lblSchedule": {

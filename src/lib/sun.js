@@ -123,16 +123,29 @@
     return date.getHours() * 60 + date.getMinutes();
   }
 
+  /* 手动模式的有效值：超过 manualUntil 之后自动失效，回落到 auto。
+   * 这是"闹钟缺席也不卡死"的关键 —— 判定本身自带自愈能力。 */
+  function effectiveMode(config, date) {
+    var m = config.mode;
+    if (m !== 'dark' && m !== 'light') return 'auto';
+    var until = Number(config.manualUntil) || 0;
+    if (until > 0 && (date || new Date()).getTime() >= until) return 'auto';
+    return m;
+  }
+
   function shouldBeDark(config, date) {
     if (!config.enabled) return false;
-    if (config.mode === 'dark') return true;
-    if (config.mode === 'light') return false;
+    var m = effectiveMode(config, date);
+    if (m === 'dark') return true;
+    if (m === 'light') return false;
     return isNight(nowMinutes(date), resolveWindow(config, date));
   }
 
-  /* 距离下一次自动切换还有多久；mode 非 auto 时返回 null */
+  /* 距离下一次自然切换还有多久。手动模式下同样返回这个时间点，
+   * 因为手动覆盖到那一刻就到期、让位给自动。
+   * enabled=false 时不排程，返回 null。 */
   function nextSwitch(config, date) {
-    if (!config.enabled || config.mode !== 'auto') return null;
+    if (!config.enabled) return null;
     date = date || new Date();
 
     var win = resolveWindow(config, date);
@@ -151,7 +164,7 @@
   }
 
   /* 只对外露出会被多模块使用的 API。
-   * isNight / nowMinutes 是内部辅助，不外露。 */
+   * isNight / nowMinutes / effectiveMode 是内部辅助，不外露。 */
   var api = {
     sunTimes: sunTimes,
     resolveWindow: resolveWindow,

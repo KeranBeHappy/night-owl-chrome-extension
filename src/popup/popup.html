@@ -10,10 +10,6 @@
       <span class="moon" aria-hidden="true"></span>
       <h1 data-i18n="popupMaster"></h1>
     </div>
-    <label class="switch">
-      <input type="checkbox" id="master">
-      <span class="track"><span class="knob"></span></span>
-    </label>
   </header>
 
   <div class="seg" id="modeSeg" role="group">
@@ -42,7 +38,11 @@
 
   <div class="site">
     <span class="site-name" id="siteName">—</span>
-    <button type="button" class="ghost" id="siteToggle"></button>
+    <div class="seg site-seg" id="siteSeg" role="group">
+      <button type="button" data-site="follow" data-i18n="popupSiteFollow"></button>
+      <button type="button" data-site="dark" data-i18n="popupSiteDark"></button>
+      <button type="button" data-site="light" data-i18n="popupSiteLight"></button>
+    </div>
   </div>
 
   <footer>

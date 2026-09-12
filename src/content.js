@@ -182,6 +182,29 @@
     apply();
   }
 
+  /* 从 storage 读取最新配置并应用。fallbackRaw 仅在读取失败时兜底。
+   *
+   * 本机 Chrome 的一个实测怪癖（tools/badge.e2e.js）：其它上下文刚
+   * chrome.storage.local.set 完，这边立刻 get 会拿到"上一次"的旧值
+   * （写一拍滞后）。因此：
+   *   - nw:tick / 补注入优先采用消息携带的配置 —— 后台取自
+   *     storage.onChanged 事件的新值，比任何"刚写完马上读"都可靠；
+   *   - 只有拿不到消息配置时才走这里回读 storage。
+   * （nw:apply 是滑块实时预览，语义就是"应用这个尚未落盘的配置"。） */
+  function syncFromStorage(fallbackRaw) {
+    try {
+      chrome.storage.local.get('config', function (res) {
+        if (chrome.runtime.lastError) {
+          if (fallbackRaw) setConfig(fallbackRaw);
+          return;
+        }
+        setConfig(res && res.config);
+      });
+    } catch (e) {
+      if (fallbackRaw) setConfig(fallbackRaw);
+    }
+  }
+
   /* ---------- 启动 ---------- */
 
   function bootstrap() {
@@ -204,14 +227,22 @@
       setActive(!!cached.d && wantsDark());
     }
 
-    // 2) 真实配置校准
-    try {
-      chrome.storage.local.get('config', function (res) {
-        // 扩展被重载 / SW 被回收后上下文会失效，读 lastError 顺手把它吃掉
-        if (chrome.runtime.lastError) return;
-        setConfig(res && res.config);
-      });
-    } catch (e) {}
+    // 2) 真实配置校准。SW 冷启动时首读可能失败（lastError），重试一次；
+    //    仍失败也无妨 —— 后续的 storage.onChanged / tick 会再校准。
+    (function calibrate(retry) {
+      try {
+        chrome.storage.local.get('config', function (res) {
+          // 扩展被重载 / SW 被回收后上下文会失效，读 lastError 顺手把它吃掉
+          if (chrome.runtime.lastError) {
+            if (retry) setTimeout(function () { calibrate(false); }, 200);
+            return;
+          }
+          setConfig(res && res.config);
+        });
+      } catch (e) {
+        if (retry) setTimeout(function () { calibrate(false); }, 200);
+      }
+    })(true);
 
     // 3) 后续变更
     try {
@@ -238,8 +269,11 @@
         if (!msg || !msg.type) return;
         if (msg.type === 'nw:apply' && msg.config) setConfig(msg.config);
         if (msg.type === 'nw:tick') {
-          if (msg.config) config = CFG.normalize(msg.config);
-          apply();
+          /* 优先采用消息配置：后台是从 storage.onChanged 事件里拿的新值，
+           * 比回读更可靠 —— 本机构建上刚写完立刻 get 会拿到旧值（写一拍滞后），
+           * 回读反而会把页面打回旧状态。没带配置才回读 storage。 */
+          if (msg.config) setConfig(msg.config);
+          else syncFromStorage();
         }
         if (msg.type === 'nw:query') {
           sendResponse({ dark: document.documentElement.classList.contains('nw-dark') });
@@ -255,10 +289,11 @@
   }
 
   /* 供补注入使用：让被重新注入的脚本能触发现有实例重新应用一次配置，
-   * 而不是被 __nightOwlLoaded 防重入静默丢弃。 */
+   * 而不是被 __nightOwlLoaded 防重入静默丢弃。带配置就用配置，
+   * 否则回读 storage（补注入离最近一次写入往往已隔很久，回读安全）。 */
   window.__nightOwlTick = function (rawConfig) {
-    if (rawConfig) config = CFG.normalize(rawConfig);
-    apply();
+    if (rawConfig) setConfig(rawConfig);
+    else syncFromStorage();
   };
 
   bootstrap();

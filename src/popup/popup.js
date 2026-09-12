@@ -83,6 +83,8 @@
 
   /* ---------- 渲染 ---------- */
 
+  /* 站点开关：三态（跟随自动 / 强制夜间 / 强制白天），直接读写黑白名单。
+   * 高亮当前实际生效的那一档，点哪档就进哪档。 */
   function renderSite() {
     var host = null;
     try { host = new URL(currentUrl).hostname; } catch (e) {}
@@ -95,12 +97,11 @@
     siteRow.style.display = '';
     $('siteName').textContent = host;
 
-    var globalDark = SUN.shouldBeDark(config);
-    var on = MATCH.siteEnabled(config, currentUrl, globalDark);
-    var btn = $('siteToggle');
-    btn.textContent = on ? 'ON' : 'OFF';
-    btn.classList.toggle('on', on);
-    btn.title = on ? msg('popupSiteOn') : msg('popupSiteOff');
+    var mode = MATCH.siteMode(config, currentUrl);
+    var btns = document.querySelectorAll('#siteSeg button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-site') === mode);
+    }
   }
 
   function stateFor(c) {
@@ -115,24 +116,24 @@
     var text = '';
     if (!config.enabled) {
       text = msg('popupDisabled');
-    } else if (config.mode === 'auto') {
-      if (!state.dark) {
-        text = msg('popupNotNow');
-        if (state && state.next) text += ' · ' + msg('popupNextSwitch', fmtDuration(state.next.minutes));
-      } else if (config.schedule.type === 'sun' && state.window) {
-        text = msg('popupSunTimes', [fmtTime(state.window.start), fmtTime(state.window.end)]);
-        if (state && state.next) text += ' · ' + msg('popupNextSwitch', fmtDuration(state.next.minutes));
-      } else if (state && state.next) {
-        text = msg('popupNextSwitch', fmtDuration(state.next.minutes));
-      }
+    } else if (config.mode !== 'auto') {
+      /* 手动模式是"临时覆盖"：到下一个自然切换点会自动回到自动。 */
+      text = msg('popupManual', [config.mode === 'dark' ? msg('popupNight') : msg('popupDay')]);
+      if (state && state.next) text += ' · ' + msg('popupManualUntil', fmtDuration(state.next.minutes));
+    } else if (!state.dark) {
+      text = msg('popupNotNow');
+      if (state && state.next) text += ' · ' + msg('popupNextSwitch', fmtDuration(state.next.minutes));
+    } else if (config.schedule.type === 'sun' && state.window) {
+      text = msg('popupSunTimes', [fmtTime(state.window.start), fmtTime(state.window.end)]);
+      if (state && state.next) text += ' · ' + msg('popupNextSwitch', fmtDuration(state.next.minutes));
+    } else if (state && state.next) {
+      text = msg('popupNextSwitch', fmtDuration(state.next.minutes));
     }
     // 通信错误的提示优先级最高，不能被状态文案盖掉
     if (!lastError) $('status').textContent = text;
   }
 
   function render(state) {
-    $('master').checked = !!config.enabled;
-
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].classList.toggle('active', buttons[i].getAttribute('data-mode') === config.mode);
@@ -157,11 +158,26 @@
       ok();
       config = CFG.normalize(raw);
       render(stateFor(config));
+      syncBadge(config);   // 打开面板时顺手校准可能陈旧的徽标
       return config;
     }).catch(function (e) {
       fail(msg('msgNoBackground') + ' · ' + (e && e.message ? e.message : 'storage'));
       return null;
     });
+  }
+
+  /* 徽标不依赖后台：扩展页面自己就能写 chrome.action。
+   * 本机 runtime.onMessage 不注册，nw:saved 提示到不了后台，storage.onChanged
+   * 唤醒 SW 也不可靠（时灵时不灵），所以徽标必须在点击的同一帧由面板自己
+   * 翻转，绝不等待任何异步链路（颜色值与 background.updateBadge 一致）。 */
+  function syncBadge(c) {
+    if (!c || !SUN) return;
+    try {
+      var on = !!c.enabled && SUN.shouldBeDark(c);
+      chrome.action.setBadgeText({ text: on ? 'ON' : 'OFF' });
+      chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
+      console.debug('[Night Owl] badge ->', on ? 'ON' : 'OFF', '(popup)');
+    } catch (e) { /* action API 不可用时只能靠后台，静默即可 */ }
   }
 
   /* 落盘。先 normalize（保证存进去的永远是合法结构），再写 storage，
@@ -170,6 +186,7 @@
     config = CFG.normalize(config);
     return STORE.write(config).then(function () {
       ok();
+      syncBadge(config);   // 落盘成功即同步徽标，不等后台
       return STORE.nudge({ type: 'nw:saved', config: config });
     }).catch(function (e) {
       fail(msg('msgNoBackground') + ' · ' + (e && e.message ? e.message : 'storage'));
@@ -200,18 +217,17 @@
   /* ---------- 事件 ---------- */
 
   function bind() {
-    $('master').addEventListener('change', function (e) {
-      if (!config) return;
-      config.enabled = e.target.checked;
-      save();
-      render();
-    });
-
+    /* 模式：自动 / 黑夜 / 白天。选黑夜或白天时记录"下一次自然切换点"作为
+     * 失效时刻 —— 到点自动回到自动，不会永久锁死。 */
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function (e) {
         if (!config) return;
-        config.mode = e.currentTarget.getAttribute('data-mode');
+        var next = SUN.nextSwitch(config);
+        CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);
+        /* 徽标与点击同帧翻转：放在 save() 的异步链里会"慢一拍"甚至丢失
+         * （后台收不到通知时没人补写），必须在这里同步写。 */
+        syncBadge(config);
         // 先把选中态画出来，用户立刻就有点击反馈
         render();
         save();
@@ -240,16 +256,16 @@
       if (config) save();
     });
 
-    /* 站点开关：按该站点**实际**的明暗取反（含名单生效后的结果），
-     * 不能用全局明暗，否则已在白名单里的站点会点了没反应。
-     * 直接改 config 后落盘，不再需要后台代劳。 */
-    $('siteToggle').addEventListener('click', function () {
-      if (!config || !currentUrl) return;
-      var dark = MATCH.siteEnabled(config, currentUrl, SUN.shouldBeDark(config));
-      MATCH.toggleSiteDark(config, currentUrl, dark);
-      render();
-      save();
-    });
+    /* 站点开关：三态选择，直接落黑名单 / 白名单 / 都不落（跟随全局）。 */
+    var siteBtns = document.querySelectorAll('#siteSeg button');
+    for (var k = 0; k < siteBtns.length; k++) {
+      siteBtns[k].addEventListener('click', function (e) {
+        if (!config || !currentUrl) return;
+        MATCH.setSiteMode(config, currentUrl, e.currentTarget.getAttribute('data-site'));
+        render();
+        save();
+      });
+    }
 
     $('openOptions').addEventListener('click', function () {
       try { chrome.runtime.openOptionsPage(); } catch (e) { fail(); }

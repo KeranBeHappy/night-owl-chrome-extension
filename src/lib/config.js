@@ -16,6 +16,7 @@
     version: VERSION,
     enabled: true,               // 总开关
     mode: 'auto',                // 'auto' | 'dark' | 'light'
+    manualUntil: 0,              // 手动模式失效时刻（毫秒时间戳）；0 表示不锁定
     theme: {
       invert: 92,                // 反色强度 %（60–100）
       brightness: 100,           // %
@@ -107,6 +108,15 @@
     if (SCHEDULE_TYPES.indexOf(c.schedule.type) < 0) c.schedule.type = 'sun';
     if (TARGETS.indexOf(c.advanced.target) < 0) c.advanced.target = 'html';
 
+    /* 手动模式（黑夜/白天）只在"当下这个时段"生效，到下一个自然切换点自动
+     * 回落到 auto。闹钟可能因 Service Worker 休眠、浏览器重启而缺席，因此这里
+     * 读配置时就做一次兜底自愈，保证过期的手动覆盖不会一直卡住。 */
+    c.manualUntil = Math.max(0, Number(c.manualUntil) || 0);
+    if (c.mode === 'auto' || (c.manualUntil > 0 && Date.now() >= c.manualUntil)) {
+      c.mode = 'auto';
+      c.manualUntil = 0;
+    }
+
     var t = c.theme;
     t.invert = Math.round(clamp(t.invert, 60, 100));
     t.brightness = Math.round(clamp(t.brightness, 40, 150));
@@ -149,7 +159,20 @@
       var mi = total % 60;
       return (h < 10 ? '0' + h : '' + h) + ':' + (mi < 10 ? '0' + mi : '' + mi);
     },
-    clamp: clamp
+    clamp: clamp,
+    /* 手动模式入口：mode='dark'|'light' 时记录失效时刻 at（下一次自然切换点，
+     * 由 sun.nextBoundary 提供）到期自动回落到 auto；传 'auto' 立即清除。 */
+    setManualMode: function (config, mode, at) {
+      if (!config) return config;
+      if (mode === 'dark' || mode === 'light') {
+        config.mode = mode;
+        config.manualUntil = Math.max(0, Number(at) || 0);
+      } else {
+        config.mode = 'auto';
+        config.manualUntil = 0;
+      }
+      return config;
+    }
     /* merge / clone 是 normalize 内部用，不外露 —— 以前在 api 里是死代码。
      * normalize 的对外契约是"输入任何形状的数据，输出合法 config"，调用方
      * 不应该自己拼接 merge 调用。 */

@@ -268,7 +268,7 @@ function saveConfig(next, notify) {
   updating = true;
   return cbCall(chrome.storage.local.set, { config: config }).then(function () {
     scheduleNext();
-    updateBadge();
+    updateBadge('saveConfig');
     if (notify) broadcast(false);
     return config;
   }).catch(function () {
@@ -279,22 +279,51 @@ function saveConfig(next, notify) {
   });
 }
 
-/* One-shot alarm for the next real transition (no polling) */
+/* One-shot alarm for the next real transition (no polling)
+ *
+ * clear/create 的顺序必须是回调链，不能并排写：alarms.clear 是异步的，
+ * 若 create 先落地、随后才轮到 clear 执行，clear 会把刚建好的新闹钟一并
+ * 删掉 —— 手动模式的"到点恢复自动"就这样无声消失。同名 create 本身就会
+ * 替换旧闹钟，clear 只是清理，放进回调里串行执行才安全。 */
 function scheduleNext() {
-  try { chrome.alarms.clear(ALARM_SWITCH); } catch (e) { }
-  if (!config || !SUN) return;
-  var next = SUN.nextSwitch(config);
-  if (!next) return;
-  try { chrome.alarms.create(ALARM_SWITCH, { when: next.at }); } catch (e) { }
+  var go = function () {
+    try {
+      if (!config || !SUN) return;
+      var next = SUN.nextSwitch(config);
+      if (!next) return;
+      chrome.alarms.create(ALARM_SWITCH, { when: next.at });
+    } catch (e) { }
+  };
+  try {
+    chrome.alarms.clear(ALARM_SWITCH, function () { void chrome.runtime.lastError; go(); });
+  } catch (e) {
+    go();
+  }
 }
 
-function updateBadge() {
+/* 手动模式到期后回到自动。闹钟就在"下一次自然切换点"触发，即手动覆盖的
+ * 失效时刻。若闹钟因休眠/重启缺席，sun.shouldBeDark 与 config.normalize
+ * 还会各自兜底自愈，这里只是让持久化的 mode 也同步干净。 */
+function expireManual() {
+  if (!config || config.mode === 'auto') return false;
+  if (!config.manualUntil || Date.now() < config.manualUntil) return false;
+  config.mode = 'auto';
+  config.manualUntil = 0;
+  return true;
+}
+
+function updateBadge(tag) {
   if (!config || !SUN) return;
+  /* 徽标明确表达当前明暗：黑夜 ON，白天或总开关关闭 OFF。 */
   var on = config.enabled && SUN.shouldBeDark(config);
-  var text = on ? 'ON' : (config.enabled ? '' : 'OFF');
+  var text = on ? 'ON' : 'OFF';
   try {
     chrome.action.setBadgeText({ text: text });
     chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
+    /* tag 标明调用点，mode/until 便于事后从 SW 控制台定位"谁用旧状态覆盖了徽标" */
+    console.debug('[Night Owl] badge ->', text,
+      '(background:' + (tag || '?') + ')',
+      'mode=' + config.mode, 'until=' + config.manualUntil, 'now=' + Date.now());
   } catch (e) { }
 }
 
@@ -441,10 +470,12 @@ function refreshMenuTitle(url) {
   } catch (e) { }
 }
 
-/* flip day/night based on the CURRENT effective state */
+/* flip day/night based on the CURRENT effective state。
+ * 快捷键切换属于"临时覆盖"：记录下一次自然切换点作为失效时刻，到点回到自动。 */
 function toggleDayNight() {
   var nowDark = config.enabled && SUN.shouldBeDark(config);
-  config.mode = nowDark ? 'light' : 'dark';
+  var next = SUN.nextSwitch(config);
+  CFG.setManualMode(config, nowDark ? 'light' : 'dark', next ? next.at : 0);
 }
 
 /* =========================================================================
@@ -478,10 +509,20 @@ MESSAGING_OK = onEvent('runtime.onMessage', function (msg, sender, sendResponse)
    * storage.onChanged and a redundant broadcast. Just re-derive the derived
    * state from the already-persisted value. */
   if (msg.type === 'nw:saved') {
-    loadConfig().then(function () {
+    /* 关键：直接采用消息携带的刚落盘配置，绝不能在这里 loadConfig() 重读。
+     * 实证（tools/badge.e2e.js）：本机构建上其它上下文刚 set 完，SW 侧立刻
+     * get 会拿到"上一次"的旧值 —— 点白天后事件里是 light，紧随的 get 却是
+     * dark/auto，把徽标写回 ON。这正是"徽标不跟着变 OFF"的根因。 */
+    if (msg.config) {
+      config = CFG ? CFG.normalize(msg.config) : msg.config;
       scheduleNext();
-      updateBadge();
-    }).catch(function () { });
+      updateBadge('nw:saved');
+    } else {
+      loadConfig().then(function () {
+        scheduleNext();
+        updateBadge('nw:saved');
+      }).catch(function () { });
+    }
     sendResponse({ ok: true });
     return;
   }
@@ -542,9 +583,16 @@ MESSAGING_OK = onEvent('runtime.onMessage', function (msg, sender, sendResponse)
 var broadcastTimer = null;
 onEvent('storage.onChanged', function (changes, area) {
   if (area !== 'local' || !changes.config) return;
-  config = CFG ? CFG.normalize(changes.config.newValue) : changes.config.newValue;
-  scheduleNext();
-  updateBadge();
+  try {
+    config = CFG ? CFG.normalize(changes.config.newValue) : changes.config.newValue;
+    /* 徽标先更新，排程在后：本机 runtime.onMessage 不注册，storage.onChanged
+     * 是徽标唯一的更新来源；排程一旦抛错绝不能连累它（以前 updateBadge 排在
+     * scheduleNext 之后，正是徽标"切了白天还挂着 ON"的候选成因之一）。 */
+    updateBadge('storage.onChanged');
+    scheduleNext();
+  } catch (e) {
+    console.warn('[Night Owl] storage.onChanged handler failed:', e && e.message);
+  }
   if (updating) return;
 
   /* Trailing-edge coalescing, not a throttle that drops. A slider drag or an
@@ -568,9 +616,15 @@ onEvent('storage.onChanged', function (changes, area) {
 /* (3) alarms.onAlarm */
 onEvent('alarms.onAlarm', function (alarm) {
   if (!alarm || alarm.name !== ALARM_SWITCH) return;
+  console.debug('[Night Owl] alarm fired, scheduledAt=', alarm.scheduledTime, 'now=', Date.now());
   loadConfig().then(function () {
+    /* 到点了：如果手动覆盖到期就落盘回到自动并广播；否则只是常规昼夜切换。 */
+    if (expireManual()) {
+      console.debug('[Night Owl] manual mode expired -> auto');
+      return saveConfig(config, true);
+    }
     scheduleNext();
-    updateBadge();
+    updateBadge('alarm');
     broadcast(true);   // SW may have been recycled - re-inject to be safe
   }).catch(function () { });
 });
@@ -704,14 +758,14 @@ function report() {
 if (NATIVE_OK) {
   loadConfig().then(function () {
     scheduleNext();
-    updateBadge();
+    updateBadge('startup');
     report();
   }).catch(function () { report(); });
 } else {
   loadConfig().then(function () {
     createMenus();
     scheduleNext();
-    updateBadge();
+    updateBadge('startup');
     report();
   }).catch(function () { report(); });
 }

@@ -109,8 +109,17 @@
     return !!globalDark;
   }
 
-  /* 按目标状态落名单：要变暗进黑名单，不要变暗进白名单。两个名单互斥。 */
-  function setSiteDark(config, url, wantDark) {
+  /* 站点三态：'follow' 跟随全局 / 'dark' 强制夜间（黑名单）/ 'light' 强制白天（白名单）。
+   * 白名单优先级最高，所以先判白名单。 */
+  function siteMode(config, url) {
+    if (isListed(config.lists.whitelist, url)) return 'light';
+    if (isListed(config.lists.blacklist, url)) return 'dark';
+    return 'follow';
+  }
+
+  /* 按三态落名单：dark -> 黑名单，light -> 白名单，follow -> 两边都摘除。
+   * 三个状态互斥，切换时先清掉两边旧规则，避免同一条 URL 同时占两个名单。 */
+  function setSiteMode(config, url, mode) {
     var rule = ruleFor(url);
     if (!rule) return false;
 
@@ -121,9 +130,15 @@
     if (rw) w.splice(w.indexOf(rw), 1);
     if (rb) b.splice(b.indexOf(rb), 1);
 
-    if (wantDark) b.push(rule);
-    else w.push(rule);
+    if (mode === 'dark') b.push(rule);
+    else if (mode === 'light') w.push(rule);
+    /* mode === 'follow'：什么都不加，回到跟随全局 */
     return true;
+  }
+
+  /* 旧接口：按目标明暗落名单，内部走三态。 */
+  function setSiteDark(config, url, wantDark) {
+    return setSiteMode(config, url, wantDark ? 'dark' : 'light');
   }
 
   /* 站点级"合并版"开关：当前是暗的就关掉，当前是亮的就点亮。
@@ -183,9 +198,12 @@
   /* 公共 API：名单匹配 + 增删改的"用户操作层"函数。
    * parseRule / matchOne / isListed / ruleFor / matchedRule 全部是
    * 这一层的内部实现，不再外露 —— 调用方应当用语义化的 siteEnabled /
-   * setSiteDark / toggleSiteDark / toggleWhitelist / inWhitelist。 */
+   * siteMode / setSiteMode / setSiteDark / toggleSiteDark /
+   * toggleWhitelist / inWhitelist。 */
   var api = {
     siteEnabled: siteEnabled,
+    siteMode: siteMode,
+    setSiteMode: setSiteMode,
     setSiteDark: setSiteDark,
     toggleSiteDark: toggleSiteDark,
     toggleWhitelist: toggleWhitelist,

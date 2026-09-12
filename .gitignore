@@ -1,0 +1,6 @@
+# CodeBuddy 工作数据（记忆、会话数据），不属于项目源码
+.codebuddy/
+
+# badge.e2e.js 真机运行的日志快照（一次性证据，结论已沉淀进 check.js 回归断言）
+tools/badge.out.txt
+tools/badge.err.txt

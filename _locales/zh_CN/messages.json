@@ -124,8 +124,12 @@
     }
   },
   "popupDisabled": {
-    "message": "已全局关闭",
+    "message": "已全局关闭：页面不会变暗，下面的昼夜模式与站点开关也暂不生效；到设置页开启后恢复。",
     "description": "总开关关闭"
+  },
+  "optModeDisabled": {
+    "message": "总开关已关闭：先开启上方的「启用」开关，才能切换昼夜模式。",
+    "description": "总开关关闭时模式段禁用的提示"
   },
   "popupNotNow": {
     "message": "当前处于白天时段",

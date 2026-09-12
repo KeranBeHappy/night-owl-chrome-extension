@@ -97,9 +97,12 @@
     siteRow.style.display = '';
     $('siteName').textContent = host;
 
+    /* 总开关是最顶层条件：关闭时站点三态与昼夜模式一起禁用（同一套语义） */
+    var on = !!config.enabled;
     var mode = MATCH.siteMode(config, currentUrl);
     var btns = document.querySelectorAll('#siteSeg button');
     for (var i = 0; i < btns.length; i++) {
+      btns[i].disabled = !on;
       btns[i].classList.toggle('active', btns[i].getAttribute('data-site') === mode);
     }
   }
@@ -134,8 +137,11 @@
   }
 
   function render(state) {
+    /* 总开关是最顶层条件：关闭时昼夜模式按钮全部禁用，状态行会说明影响 */
+    var on = !!config.enabled;
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
+      buttons[i].disabled = !on;
       buttons[i].classList.toggle('active', buttons[i].getAttribute('data-mode') === config.mode);
     }
 
@@ -222,7 +228,8 @@
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function (e) {
-        if (!config) return;
+        /* 总开关是最顶层条件：关闭时昼夜切换不生效（按钮已禁用，这里兜底） */
+        if (!config || !config.enabled) return;
         var next = SUN.nextSwitch(config);
         CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);
         /* 徽标与点击同帧翻转：放在 save() 的异步链里会"慢一拍"甚至丢失
@@ -260,7 +267,8 @@
     var siteBtns = document.querySelectorAll('#siteSeg button');
     for (var k = 0; k < siteBtns.length; k++) {
       siteBtns[k].addEventListener('click', function (e) {
-        if (!config || !currentUrl) return;
+        /* 与昼夜模式同一套门控：总开关关闭时站点三态也不生效 */
+        if (!config || !currentUrl || !config.enabled) return;
         MATCH.setSiteMode(config, currentUrl, e.currentTarget.getAttribute('data-site'));
         render();
         save();

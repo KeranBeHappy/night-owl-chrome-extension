@@ -68,6 +68,9 @@ h1 { font-size: 14px; font-weight: 500; margin: 0; }
 }
 .seg button:hover { color: var(--text); }
 .seg button.active { background: var(--panel-2); color: var(--text); }
+/* 总开关关闭时整段禁用：明确表达"点了也不会生效"，避免像 bug */
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.seg button:disabled:hover { color: var(--muted); }
 
 .status {
   margin: 10px 0 12px;

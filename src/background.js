@@ -462,7 +462,9 @@ function refreshMenuTitle(url) {
   var inList = MATCH.inWhitelist(config, url);
   try {
     chrome.contextMenus.update('nw-whitelist', {
-      title: inList ? i18n('ctxRemoveWhitelist') : i18n('ctxAddWhitelist')
+      title: inList ? i18n('ctxRemoveWhitelist') : i18n('ctxAddWhitelist'),
+      /* 总开关关闭时把菜单项一并置灰：用户在菜单层就能看到"为什么不可用" */
+      enabled: !!(config && config.enabled)
     }, function () {
       void chrome.runtime.lastError;
       try { if (chrome.contextMenus.refresh) chrome.contextMenus.refresh(); } catch (e) { }
@@ -473,9 +475,13 @@ function refreshMenuTitle(url) {
 /* flip day/night based on the CURRENT effective state。
  * 快捷键切换属于"临时覆盖"：记录下一次自然切换点作为失效时刻，到点回到自动。 */
 function toggleDayNight() {
+  /* 总开关是最顶层条件：关闭时快捷键不切换昼夜（不落盘、不广播），
+   * 避免用户"按了没反应"还写回 mode=dark + manualUntil=0 的锁死配置。 */
+  if (!config || !config.enabled) return false;
   var nowDark = config.enabled && SUN.shouldBeDark(config);
   var next = SUN.nextSwitch(config);
   CFG.setManualMode(config, nowDark ? 'light' : 'dark', next ? next.at : 0);
+  return true;
 }
 
 /* =========================================================================
@@ -632,11 +638,13 @@ onEvent('alarms.onAlarm', function (alarm) {
 /* (4) commands.onCommand */
 onEvent('commands.onCommand', function (command) {
   loadConfig().then(function () {
+    /* 总开关是最顶层条件：关闭时两个快捷键都直接忽略（不落盘、不广播） */
     if (command === 'nw-toggle-mode') {
-      toggleDayNight();
+      if (!toggleDayNight()) return null;
       return saveConfig(config, true);
     }
     if (command === 'nw-toggle-site') {
+      if (!config || !config.enabled) return null;
       return cbCall(chrome.tabs.query, { active: true, currentWindow: true }).then(function (tabs) {
         if (tabs && tabs[0] && tabs[0].url) toggleWhitelistFor(tabs[0].url);
         return saveConfig(config, true);
@@ -688,6 +696,8 @@ onEvent('contextMenus.onClicked', function (info) {
   if (info.menuItemId === 'nw-whitelist') {
     var url = info.pageUrl || info.frameUrl || menuUrl;
     loadConfig().then(function () {
+      /* 总开关是最顶层条件：关闭时站点白名单切换不生效（菜单项已置灰，这里兜底） */
+      if (!config || !config.enabled) return null;
       toggleWhitelistFor(url);
       return saveConfig(config, true);
     }).then(function () {

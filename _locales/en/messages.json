@@ -124,8 +124,12 @@
     }
   },
   "popupDisabled": {
-    "message": "Turned off globally",
+    "message": "Night mode is off globally: pages won't darken, and the mode / site switches below are inactive until you enable it in Settings.",
     "description": "Master switch off"
+  },
+  "optModeDisabled": {
+    "message": "The master switch is off — enable it above before picking a mode.",
+    "description": "Mode segment disabled while master switch is off"
   },
   "popupNotNow": {
     "message": "Daytime right now",

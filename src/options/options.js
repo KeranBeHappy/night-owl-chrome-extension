@@ -166,10 +166,21 @@
     renderList('whitelist');
   }
 
+  /* 总开关是最顶层条件：关闭时昼夜模式不可切换（与 popup 同一套门控语义），
+   * 同时显示提示，避免"点了没反应"被当成 bug。 */
+  function syncModeGate() {
+    var on = !!config.enabled;
+    var btns = document.querySelectorAll('#modeSeg button');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = !on;
+    var hint = $('modeDisabledHint');
+    if (hint) hint.style.display = on ? 'none' : '';
+  }
+
   function render() {
     $('enabled').checked = !!config.enabled;
     setSeg('modeSeg', 'mode', config.mode);
     setSeg('typeSeg', 'type', config.schedule.type);
+    syncModeGate();
 
     $('latitude').value = config.schedule.latitude;
     $('longitude').value = config.schedule.longitude;
@@ -367,12 +378,16 @@
   function bindGeneral() {
     $('enabled').addEventListener('change', function (e) {
       config.enabled = e.target.checked;
+      /* 立刻刷新门控与提示，不等落盘回声 —— 落盘失败时 UI 也不能说谎 */
+      syncModeGate();
       save();
     });
 
     var modeBtns = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < modeBtns.length; i++) {
       modeBtns[i].addEventListener('click', function (e) {
+        /* 总开关是最顶层条件：关闭时昼夜切换不生效（按钮已禁用，这里兜底） */
+        if (!config || !config.enabled) return;
         /* 手动选黑夜/白天时记录下一个自然切换点作为失效时刻，到点自动回到自动。 */
         var next = SUN.nextSwitch(config);
         CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);

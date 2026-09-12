@@ -266,6 +266,7 @@ console.log('[6] background.js');
 function runBackground(opts) {
   var listeners = {};
   var sent = [];         // 记录 tabs.sendMessage，用于验证"广播是否真的发出去了"
+  var menuUpdates = [];  // 记录 contextMenus.update，用于验证菜单项置灰
   var stored = { config: (opts && opts.seedConfig) ? opts.seedConfig : {} };
   var badge = { text: null };   // 记录 setBadgeText，用于验证徽标语义
   /* breakApi: make one specific addListener throw, to prove that a single
@@ -321,7 +322,7 @@ function runBackground(opts) {
     contextMenus: {
       removeAll: function (cb) { if (cb) cb(); },
       create: function (o, cb) { if (cb) cb(); },
-      update: function (id, o, cb) { if (cb) cb(); },
+      update: function (id, o, cb) { menuUpdates.push({ id: id, props: o }); if (cb) cb(); },
       refresh: function () {},
       onClicked: on('onClicked')
     },
@@ -374,7 +375,7 @@ function runBackground(opts) {
 
   var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'onShown', 'onClicked', 'onMessage', 'storageChanged'];
   var missing = want.filter(function (k) { return typeof listeners[k] !== 'function'; });
-  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
+  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, menuUpdates: menuUpdates, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
 }
 
 (function () {
@@ -594,6 +595,32 @@ console.log('[8] broadcast（异步断言）');
     (mode === 'dark' || mode === 'light')
       ? ok('快捷键 -> mode 已落盘 (' + mode + ')')
       : bad('快捷键落盘', String(mode));
+  });
+
+  // 回归：总开关是最顶层条件 —— 关闭时两个快捷键都不落盘、不广播
+  var r5 = runBackground({ native: true, seedConfig: C.normalize({ enabled: false }) });
+  var sentBefore = r5.sent.length;
+  r5.listeners.onCommand('nw-toggle-mode');
+  r5.listeners.onCommand('nw-toggle-site');
+  flush(function () {
+    var cfg = r5.stored.config;
+    var listsClean = cfg && cfg.lists &&
+      cfg.lists.blacklist.length + cfg.lists.whitelist.length === 0;
+    (r5.sent.length === sentBefore && cfg && cfg.mode === 'auto' && listsClean)
+      ? ok('总开关关闭：快捷键不切换昼夜/站点，也不广播')
+      : bad('快捷键关态未门控', JSON.stringify({ sent: r5.sent.length, before: sentBefore, m: cfg && cfg.mode }));
+  });
+
+  // 回归：总开关关闭时右键菜单白名单切换不生效，且菜单项本身置灰
+  var r6 = runBackground({ native: true, seedConfig: C.normalize({ enabled: false }) });
+  r6.listeners.onClicked({ menuItemId: 'nw-whitelist', pageUrl: 'https://example.com/' });
+  r6.listeners.onShown({ pageUrl: 'https://example.com/' });
+  flush(function () {
+    var wl = r6.stored.config && r6.stored.config.lists.whitelist;
+    var last = r6.menuUpdates[r6.menuUpdates.length - 1];
+    ((!wl || wl.length === 0) && last && last.id === 'nw-whitelist' && last.props && last.props.enabled === false)
+      ? ok('总开关关闭：右键白名单不生效，菜单项置灰 (enabled=false)')
+      : bad('右键关态', JSON.stringify({ wl: wl, updates: r6.menuUpdates }));
   });
 })();
 
@@ -910,6 +937,22 @@ afterSections(function () {
         (!stale)
           ? ok('nw:saved 未触发 storage 重读（消息配置直达）')
           : bad('nw:saved 重读', '本机 get 有写一拍滞后，禁止回读');
+      });
+    });
+  })();
+
+  // (i) 总开关是最顶层条件：关闭时 popup 的昼夜模式与站点三态都不生效
+  (function () {
+    var p = runPopup({ seed: C.normalize({ enabled: false }), messagingAvailable: false });
+    flush(function () {
+      p.fix.modeBtns[1].click();   // 黑夜 —— 应被忽略
+      p.fix.siteBtns[1].click();   // 强制夜间 —— 应被忽略
+      flush(function () {
+        var cfg = p.st.data.config;
+        (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0 &&
+          cfg.lists.blacklist.length + cfg.lists.whitelist.length === 0)
+          ? ok('总开关关闭：popup 昼夜与站点开关均不生效')
+          : bad('popup 关态未门控', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil, l: cfg && cfg.lists }));
       });
     });
   })();

@@ -156,6 +156,15 @@ input:focus, textarea:focus {
   border-color: var(--accent);
 }
 
+/* 数字输入框（经纬度、日落/日出偏移）：去掉尾部原生的上下箭头，
+ * 数值直接键入或滚轮调整，箭头在暗色主题里突兀且占宽度 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
 .seg {
   display: flex;
   gap: 2px;
@@ -178,6 +187,9 @@ input:focus, textarea:focus {
 }
 .seg button:hover { color: var(--text); }
 .seg button.active { background: var(--panel-2); color: var(--text); }
+/* 总开关关闭时模式段禁用：与 popup 的昼夜开关保持同一套门控语义 */
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.seg button:disabled:hover { color: var(--muted); }
 
 .radio-list { margin-top: 6px; }
 .radio-list label {

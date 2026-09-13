@@ -403,7 +403,6 @@
     for (var j = 0; j < btns.length; j++) {
       btns[j].classList.toggle('active', btns[j].getAttribute('data-tab') === name);
     }
-    try { localStorage.setItem('night-owl:tab', name); } catch (e) {}
   }
 
   /* ---------- 备份 ---------- */
@@ -771,8 +770,8 @@
   bindExternalChanges();
 
   var initial = 'general';
-  try { initial = localStorage.getItem('night-owl:tab') || 'general'; } catch (e) {}
-  /* popup「了解更多」通过 options.html?tab=other 直达：URL 参数优先于记忆的 tab */
+  /* popup「了解更多」通过 options.html?tab=other 直达：URL 参数是显式指定，优先于默认的常规页。
+   * 不再记忆上次的 tab —— 每次打开设置页都回到第一个标签（常规）。 */
   try {
     var qs = new URLSearchParams(location.search);
     var askTab = qs.get('tab');

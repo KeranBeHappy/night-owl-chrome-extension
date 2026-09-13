@@ -148,7 +148,7 @@
     "description": "Other tab: group label"
   },
   "hintOtherLimits": {
-    "message": "For security reasons, the browser blocks extensions from injecting scripts into: internal pages (chrome://, edge://), the Web Store, PDF viewers, and other extensions' pages. The toolbar icon shows a yellow exclamation mark there and night mode can't apply — this is a browser limitation, not a bug.",
+    "message": "For security reasons, the browser blocks extensions from injecting scripts into: internal pages (chrome://, edge://), the Web Store, PDF viewers, and other extensions' pages. Night mode can't apply there — this is a browser limitation, not a bug.",
     "description": "Other tab: which pages are restricted"
   },
   "hintOtherFile": {

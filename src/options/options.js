@@ -676,6 +676,8 @@
     $('resetMediaDim').addEventListener('click', function () {
       if ($('resetMediaDim').disabled) return;
       config.advanced.mediaDim = CFG.DEFAULTS.advanced.mediaDim;
+      // syncOutputs 只刷新数值文本，滑块位置必须在这里单独归位（否则数字变 92% 但滑块不动）
+      $('mediaDim').value = config.advanced.mediaDim;
       syncOutputs();
       updatePreview();
       save();

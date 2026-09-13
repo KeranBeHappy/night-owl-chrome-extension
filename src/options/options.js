@@ -341,10 +341,12 @@
 
   /* ---------- 备份 ---------- */
 
+  /** 导出文件名用的时间戳：YYYYMMDD-HHMMSS（精确到秒，同一天多次导出不会互相覆盖）。 */
   function stamp() {
     var d = new Date();
     function p(n) { return (n < 10 ? '0' : '') + n; }
-    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+      '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
   }
 
   function exportConfig() {

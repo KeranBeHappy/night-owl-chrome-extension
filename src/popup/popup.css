@@ -158,13 +158,17 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
   padding: 9px 10px;
   margin-bottom: 12px;
 }
+/* 提示块可能只有一行（总开关关闭）、也可能两行（两种原因同时成立）、
+ * 按钮则只在"本页不支持"时出现 —— 间距靠相邻兄弟规则给，最后一行不留底边距，
+ * 这样单行/双行/有无按钮四种组合下卡片的上下内边距都是对称的。 */
 .hint-block .hint-text {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 11px;
   line-height: 1.5;
   color: var(--muted);
 }
-.hint-block .link { font-size: 11px; }
+.hint-block .hint-text + .hint-text { margin-top: 6px; }
+.hint-block .link { display: block; font-size: 11px; margin-top: 6px; }
 
 footer { display: flex; justify-content: flex-end; }
 .link {

@@ -78,6 +78,11 @@ popup / options：UI 面板
    不落名单 / 黑名单 / 白名单。白名单优先级最高；三个状态互斥，切换时先清两边旧规则。
    旧的 `setSiteDark/toggleSiteDark` 保留为兼容层，内部委托三态。
 4. **`config.enabled` 总开关只属于设置页**，popup 里没有总开关。
+   popup 控件的可用性统一由 `controlsState()`（`masterOff` / `unsupported` / `disabled`）
+   判定：**渲染与所有 handler 守卫都只查它**，不要再各写一套条件（历史上滑杆漏了
+   总开关、站点三态漏了"本页不支持"）。"为什么用不了"也只有一个出口 `#noticeBlock`
+   （按原因显示 1~2 行，两种原因同时成立就显示两行）；控件不可用时状态行留空，
+   不再在状态行重复一遍禁用文案（会与提示块互相遮蔽）。
 5. **徽标只有一个全局值**：黑夜 `ON`（绿），白天（含总开关关闭）`OFF`（灰），
    判定与颜色统一由 `SUN.badgeState(config)` 提供，三个写入方（popup / options / background）
    共用。**绝对不要写 per-tab 徽标**（`setBadgeText({tabId})`）：Chrome 没有"解除覆盖"的 API，
@@ -114,6 +119,8 @@ popup / options：UI 面板
 ## 提交与边界
 
 - 只在用户明确要求时才 commit；不要主动 commit、不要 amend、不要 force push。
+- **改完不要问"要不要提交/推送"**（用户 2026-09-13 明确要求）：干完活直接汇报结果，
+  提交时机由用户开口；问到反而多余。同理，报告类文件也不要主动追问是否入库。
 - `.codebuddy/` 存放工作数据，**不要删除**。
 - `tools/` 里的 `.txt`/`.out`/`.png` 是历史运行快照与生成物，不要当作源码去"整理"。
 - 不引入新依赖、不加构建工具、不改目录结构，除非用户明确要求。

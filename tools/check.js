@@ -798,8 +798,10 @@ afterSections(function () {
         querySelector: function () { return null; }
       };
     }
-    ['status', 'brightness', 'brightnessOut', 'temperature',
-     'temperatureOut', 'siteName', 'openOptions', 'unsupportedBlock', 'learnMore'].forEach(function (id) {
+    ['status', 'brightness', 'brightnessOut', 'temperature', 'temperatureOut',
+     'siteName', 'openOptions', 'learnMore',
+     /* 唯一的"为什么用不了"提示块 + 两行原因（对应 popup.html #noticeBlock） */
+     'noticeBlock', 'noticeDisabled', 'noticeUnsupported'].forEach(function (id) {
       nodes[id] = el('div');
       nodes[id].id = id;
     });
@@ -1098,36 +1100,111 @@ afterSections(function () {
     });
   })();
 
-  // (i) 总开关是最顶层条件：关闭时 popup 的昼夜模式与站点三态都不生效
+  /* (i) 门控统一：总开关关闭 → 所有控件（含滑杆）禁用、提示只从 noticeBlock 出、
+   * 状态行留空；点击/拖动一律不落盘。 */
   (function () {
     var p = runPopup({ seed: C.normalize({ enabled: false }) });
     flush(function () {
+      var n = p.fix.nodes;
+      var allDisabled = p.fix.modeBtns[0].disabled && p.fix.modeBtns[1].disabled &&
+        p.fix.siteBtns[1].disabled && n.brightness.disabled && n.temperature.disabled;
+      var notice = n.noticeBlock.style.display !== 'none' &&
+        n.noticeDisabled.style.display !== 'none' &&
+        n.noticeUnsupported.style.display === 'none' &&
+        n.learnMore.style.display === 'none';
+      (allDisabled && notice && n.status.textContent === '')
+        ? ok('总开关关闭：全部控件（含滑杆）禁用 + 提示只走 noticeBlock + 状态行留空')
+        : bad('总开关门控', JSON.stringify({
+            allDisabled: allDisabled, notice: notice, status: n.status.textContent
+          }));
+
       p.fix.modeBtns[1].click();   // 黑夜 —— 应被忽略
       p.fix.siteBtns[1].click();   // 强制夜间 —— 应被忽略
+      n.brightness.value = '80';
+      n.brightness._h.input({ target: { value: '80' } });
+      n.brightness._h.change({ target: {} });
       flush(function () {
         var cfg = p.st.data.config;
         (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0 &&
-          cfg.lists.blacklist.length + cfg.lists.whitelist.length === 0)
-          ? ok('总开关关闭：popup 昼夜与站点开关均不生效')
-          : bad('popup 关态未门控', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil, l: cfg && cfg.lists }));
+          cfg.lists.blacklist.length + cfg.lists.whitelist.length === 0 &&
+          cfg.theme.brightness === 100)
+          ? ok('总开关关闭：昼夜/站点/滑杆操作均不落盘')
+          : bad('popup 关态未门控', JSON.stringify({
+              m: cfg && cfg.mode, u: cfg && cfg.manualUntil,
+              l: cfg && cfg.lists, b: cfg && cfg.theme.brightness
+            }));
       });
     });
   })();
 
-  // (j) 受限页面（chrome:// 等）：控件禁用；徽标仍只写全局值（无 per-tab 写入）
+  /* (j) 受限页（chrome:// 等）：控件统一禁用（含滑杆）、站点整行隐藏、
+   * 提示只走 noticeBlock 的"不支持"一行；徽标仍只写全局值。 */
   (function () {
     var p = runPopup({ seed: C.normalize({ enabled: true }), url: 'chrome://settings/' });
     flush(function () {
+      var n = p.fix.nodes;
       (Object.keys(p.badge.tabTexts).length === 0)
         ? ok('受限页：popup 不写任何 per-tab 徽标')
         : bad('popup 写了 per-tab', JSON.stringify(p.badge.tabTexts));
+
+      var allDisabled = p.fix.modeBtns[0].disabled && p.fix.modeBtns[1].disabled &&
+        n.brightness.disabled && n.temperature.disabled;
+      var notice = n.noticeBlock.style.display !== 'none' &&
+        n.noticeUnsupported.style.display !== 'none' &&
+        n.noticeDisabled.style.display === 'none' &&
+        n.learnMore.style.display !== 'none' &&
+        n.status.textContent === '';
+      (allDisabled && notice && p.fix.siteRow.style.display === 'none')
+        ? ok('受限页：控件禁用 + 站点行隐藏 + 提示只走 noticeBlock（不支持一行）')
+        : bad('受限页控件/提示', JSON.stringify({
+            allDisabled: allDisabled, notice: notice, siteRow: p.fix.siteRow.style.display
+          }));
+
       p.fix.modeBtns[1].click();   // 黑夜 —— 应被忽略
+      p.fix.siteBtns[1].click();   // 强制夜间 —— 同样应被忽略（handler 兜底新补了本页判定）
       flush(function () {
         var cfg = p.st.data.config;
-        (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0)
-          ? ok('受限页面：popup 昼夜模式不生效')
-          : bad('popup 受限页未门控', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil }));
+        (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0 &&
+          cfg.lists.blacklist.length + cfg.lists.whitelist.length === 0)
+          ? ok('受限页：昼夜与站点操作均不生效')
+          : bad('popup 受限页未门控', JSON.stringify({
+              m: cfg && cfg.mode, u: cfg && cfg.manualUntil, l: cfg && cfg.lists
+            }));
       });
+    });
+  })();
+
+  /* (j2) 两种原因同时成立（总开关关闭 + 受限页）：同一个提示块里显示两行，
+   * 不再像以前那样两块提示各说各话。 */
+  (function () {
+    var p = runPopup({ seed: C.normalize({ enabled: false }), url: 'chrome://settings/' });
+    flush(function () {
+      var n = p.fix.nodes;
+      (n.noticeBlock.style.display !== 'none' &&
+        n.noticeDisabled.style.display !== 'none' &&
+        n.noticeUnsupported.style.display !== 'none' &&
+        n.learnMore.style.display !== 'none')
+        ? ok('总开关关闭 + 受限页：两行原因合并进同一个提示块')
+        : bad('提示叠加处理', JSON.stringify({
+            b: n.noticeBlock.style.display, d: n.noticeDisabled.style.display,
+            u: n.noticeUnsupported.style.display
+          }));
+    });
+  })();
+
+  /* (j3) 普通页 + 已启用：一切正常 —— 控件可用、无提示块、状态行有昼夜文案。 */
+  (function () {
+    var p = runPopup({ seed: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      var n = p.fix.nodes;
+      (!p.fix.modeBtns[0].disabled && !p.fix.siteBtns[0].disabled &&
+        !n.brightness.disabled && n.noticeBlock.style.display === 'none' &&
+        n.status.textContent !== '')
+        ? ok('普通页 + 已启用：控件可用、无提示块、状态行有文案')
+        : bad('正常态渲染', JSON.stringify({
+            mode: p.fix.modeBtns[0].disabled, slider: n.brightness.disabled,
+            block: n.noticeBlock.style.display, status: n.status.textContent
+          }));
     });
   })();
 

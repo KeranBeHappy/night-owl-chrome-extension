@@ -124,7 +124,7 @@
     }
   },
   "popupDisabled": {
-    "message": "Night mode is off globally: pages won't darken, and the mode / site switches below are inactive until you enable it in Settings.",
+    "message": "Night mode is off globally: pages won't darken, and the mode / site switches are inactive until you enable it in Settings.",
     "description": "Master switch off"
   },
   "optModeDisabled": {

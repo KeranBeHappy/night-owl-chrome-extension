@@ -45,10 +45,12 @@
     </div>
   </div>
 
-  <!-- 受限页面（chrome:// 等）提示：扩展无法在此页面生效，可去设置页了解详情 -->
-  <div class="hint-block" id="unsupportedBlock" style="display:none">
-    <p class="hint-text" data-i18n="popupUnsupported"></p>
-    <button type="button" class="link" id="learnMore" data-i18n="popupLearnMore"></button>
+  <!-- 「为什么用不了」的唯一出口：总开关关闭 / 本页不支持（两种原因可同时出现，
+       就同时显示两行）。状态行不再重复说明，避免两处提示互相遮蔽。 -->
+  <div class="hint-block" id="noticeBlock" style="display:none">
+    <p class="hint-text" id="noticeDisabled" data-i18n="popupDisabled" style="display:none"></p>
+    <p class="hint-text" id="noticeUnsupported" data-i18n="popupUnsupported" style="display:none"></p>
+    <button type="button" class="link" id="learnMore" data-i18n="popupLearnMore" style="display:none"></button>
   </div>
 
   <footer>

@@ -115,24 +115,50 @@
 
   /* 站点开关：三态（跟随自动 / 强制夜间 / 强制白天），直接读写黑白名单。
    * 高亮当前实际生效的那一档，点哪档就进哪档。 */
-  function renderSite() {
+  /* ---------- 控件可用性：唯一判定出口 ----------
+   * popup 的控件会因两种原因失效，而且可能同时成立：
+   *   - masterOff  ：设置页的总开关关闭 → 页面不变暗，所有控件都不生效
+   *   - unsupported：当前页面（chrome:// 等）禁止注入内容脚本 → 本页控件不生效
+   * 以前每个控件各写一套条件，于是滑杆漏了 masterOff、站点三态漏了 unsupported。
+   * 现在渲染与 handler 守卫都只查这一个纯函数 —— 以后加控件不会再漏条件。 */
+  function controlsState() {
+    var masterOff = !config || !config.enabled;
+    var unsupported = isUnsupported(currentUrl);
+    return { masterOff: masterOff, unsupported: unsupported, disabled: masterOff || unsupported };
+  }
+
+  /** 按需显示/隐藏一个节点（只碰 display，不引入别的状态）。 */
+  function show(el, on) {
+    if (el) el.style.display = on ? '' : 'none';
+  }
+
+  /* 「为什么用不了」的唯一出口：一个提示块，按原因显示 1~2 行。
+   * 总开关关闭与本页不支持可以同时成立，那就两行一起显示 —— 同一个块里说清楚，
+   * 不再像以前那样一半在状态行、一半在另一个块里（互相遮蔽、还会同时出现）。 */
+  function renderNotice(st) {
+    show($('noticeDisabled'), st.masterOff);
+    show($('noticeUnsupported'), st.unsupported);
+    show($('learnMore'), st.unsupported);   // 只有"本页不支持"才需要看限制说明
+    show($('noticeBlock'), st.disabled);
+  }
+
+  /* 站点三态只对当前站点有意义：受限页整行隐藏（不是禁用），其余按统一判定禁用。 */
+  function renderSite(st) {
     var host = null;
     try { host = new URL(currentUrl).hostname; } catch (e) {}
 
     var siteRow = document.querySelector('.site');
-    if (!host || !currentUrl || currentUrl.indexOf('http') !== 0) {
+    if (!host || st.unsupported) {
       siteRow.style.display = 'none';
       return;
     }
     siteRow.style.display = '';
     $('siteName').textContent = host;
 
-    /* 总开关是最顶层条件：关闭时站点三态与昼夜模式一起禁用（同一套语义） */
-    var on = !!config.enabled;
     var mode = MATCH.siteMode(config, currentUrl);
     var btns = document.querySelectorAll('#siteSeg button');
     for (var i = 0; i < btns.length; i++) {
-      btns[i].disabled = !on;
+      btns[i].disabled = st.disabled;
       btns[i].classList.toggle('active', btns[i].getAttribute('data-site') === mode);
     }
   }
@@ -145,10 +171,12 @@
     };
   }
 
-  function renderStatus(state) {
+  /* 状态行只讲"昼夜状态"。控件不可用时留空 —— 原因已经在提示块里讲过了，
+   * 这里再显示"夜间时段 19:00–07:00"只会让人以为一切正常（以前的老毛病）。 */
+  function renderStatus(state, st) {
     var text = '';
-    if (!config.enabled) {
-      text = msg('popupDisabled');
+    if (st.disabled) {
+      text = '';
     } else if (config.mode !== 'auto') {
       /* 手动模式是"临时覆盖"：到下一个自然切换点会自动回到自动。 */
       text = msg('popupManual', [config.mode === 'dark' ? msg('popupNight') : msg('popupDay')]);
@@ -167,18 +195,16 @@
   }
 
   function render(state) {
-    /* 总开关是最顶层条件：关闭时昼夜模式按钮全部禁用，状态行会说明影响；
-     * 受限页面（chrome:// 等）上扩展无法生效，相关控件一并禁用并提示原因 */
-    var on = !!config.enabled;
-    var supported = !isUnsupported(currentUrl);
+    var st = controlsState();
+
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
-      buttons[i].disabled = !on || !supported;
+      buttons[i].disabled = st.disabled;
       buttons[i].classList.toggle('active', buttons[i].getAttribute('data-mode') === config.mode);
     }
 
-    $('brightness').disabled = !supported;
-    $('temperature').disabled = !supported;
+    $('brightness').disabled = st.disabled;
+    $('temperature').disabled = st.disabled;
     $('brightness').value = config.theme.brightness;
     $('brightnessOut').textContent = config.theme.brightness + '%';
     $('temperature').value = config.theme.temperature;
@@ -186,12 +212,10 @@
       ? '+' + config.theme.temperature
       : String(config.theme.temperature);
 
-    var block = $('unsupportedBlock');
-    if (block) block.style.display = supported ? 'none' : '';
-
+    renderNotice(st);
     applyTheme();
-    renderSite();
-    renderStatus(state || stateFor(config));
+    renderSite(st);
+    renderStatus(state || stateFor(config), st);
   }
 
   /* ---------- 读写 ---------- */
@@ -265,13 +289,15 @@
   /* ---------- 事件 ---------- */
 
   function bind() {
+    /* 所有交互的守卫都查同一个 controlsState()（按钮已禁用，这里只是兜底）；
+     * 以前每个 handler 各写一套条件 —— 站点三态就漏了"本页不支持"。 */
+
     /* 模式：自动 / 黑夜 / 白天。选黑夜或白天时记录"下一次自然切换点"作为
      * 失效时刻 —— 到点自动回到自动，不会永久锁死。 */
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function (e) {
-        /* 总开关是最顶层条件：关闭或受限页面时昼夜切换不生效（按钮已禁用，这里兜底） */
-        if (!config || !config.enabled || isUnsupported(currentUrl)) return;
+        if (controlsState().disabled) return;
         var next = SUN.nextSwitch(config);
         CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);
         /* 徽标与点击同帧翻转：放在 save() 的异步链里会"慢一拍"甚至丢失
@@ -284,17 +310,18 @@
     }
 
     $('brightness').addEventListener('input', function (e) {
-      if (!config) return;
+      if (controlsState().disabled) return;
       config.theme.brightness = parseInt(e.target.value, 10);
       $('brightnessOut').textContent = config.theme.brightness + '%';
       preview();
     });
     $('brightness').addEventListener('change', function () {
-      if (config) save();
+      if (controlsState().disabled) return;
+      save();
     });
 
     $('temperature').addEventListener('input', function (e) {
-      if (!config) return;
+      if (controlsState().disabled) return;
       config.theme.temperature = parseInt(e.target.value, 10);
       $('temperatureOut').textContent = config.theme.temperature > 0
         ? '+' + config.theme.temperature
@@ -302,15 +329,15 @@
       preview();
     });
     $('temperature').addEventListener('change', function () {
-      if (config) save();
+      if (controlsState().disabled) return;
+      save();
     });
 
     /* 站点开关：三态选择，直接落黑名单 / 白名单 / 都不落（跟随全局）。 */
     var siteBtns = document.querySelectorAll('#siteSeg button');
     for (var k = 0; k < siteBtns.length; k++) {
       siteBtns[k].addEventListener('click', function (e) {
-        /* 与昼夜模式同一套门控：总开关关闭时站点三态也不生效 */
-        if (!config || !currentUrl || !config.enabled) return;
+        if (controlsState().disabled || !currentUrl) return;
         MATCH.setSiteMode(config, currentUrl, e.currentTarget.getAttribute('data-site'));
         render();
         save();

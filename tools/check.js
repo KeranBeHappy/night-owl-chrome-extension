@@ -386,9 +386,8 @@ function runBackground(opts) {
     return { error: e.message, listeners: listeners };
   }
 
-  /* 期待的监听器。onActivated 是"onShown 缺席时才注册"的条件兜底，默认夹具
-   * 里 onShown 存在，所以它不在这个列表里（另一条断言单独覆盖兜底分支）。 */
-  var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'onShown', 'onClicked', 'storageChanged'];
+  /* 期待的监听器（移除右键菜单后剩 5 个）。 */
+  var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'storageChanged'];
   var missing = want.filter(function (k) { return typeof listeners[k] !== 'function'; });
   return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, menuUpdates: menuUpdates, alarmsCreated: alarmsCreated, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
 }
@@ -397,54 +396,29 @@ function runBackground(opts) {
   // (a) native service worker path
   var sw = runBackground({ native: true });
   if (sw.error) { bad('SW 原生路径执行', sw.error); return; }
-  sw.missing.length ? bad('SW 监听器', 'missing ' + sw.missing.join(',')) : ok('SW 原生路径：7 个监听器全部注册');
+  sw.missing.length ? bad('SW 监听器', 'missing ' + sw.missing.join(',')) : ok('SW 原生路径：5 个监听器全部注册');
 
   /* REGRESSION: one throwing registration must not kill the others.
-   * 真实事故：contextMenus.onClicked 在 Chrome 152 上抛错，把排在它后面的
-   * 监听器一起拖死，UI 与后台之间彻底失去了通道（"改完关掉面板又变回去"）。 */
+   * 真实事故：某个 addListener 抛错，把排在它后面的监听器一起拖死。
+   * 这里用 commands.onCommand 注入故障，验证隔离机制仍然有效。 */
   (function () {
-    var hostile = runBackground({ native: true, breakApi: 'contextMenus.onClicked' });
+    var hostile = runBackground({ native: true, breakApi: 'commands.onCommand' });
     if (hostile.error) { bad('隔离注册（注入故障）', hostile.error); return; }
-    var stillThere = ['storageChanged', 'onAlarm', 'onCommand', 'onInstalled']
+    var stillThere = ['storageChanged', 'onAlarm', 'onInstalled', 'onStartup']
       .filter(function (k) { return typeof hostile.listeners[k] === 'function'; });
     stillThere.length === 4
-      ? ok('隔离注册：onClicked 抛错时 storage/alarms/commands/installed 仍存活')
-      : bad('隔离注册', '被拖死的监听器: ' + ['storageChanged', 'onAlarm', 'onCommand', 'onInstalled']
+      ? ok('隔离注册：onCommand 抛错时 storage/alarms/installed/startup 仍存活')
+      : bad('隔离注册', '被拖死的监听器: ' + ['storageChanged', 'onAlarm', 'onInstalled', 'onStartup']
         .filter(function (k) { return typeof hostile.listeners[k] !== 'function'; }).join(','));
     (hostile.regFail && hostile.regFail.length)
       ? ok('隔离注册：失败被记录 (' + hostile.regFail[0].slice(0, 40) + ')')
       : bad('隔离注册', 'REG_FAIL 未记录失败');
   })();
 
-  /* REGRESSION: an event object that does not exist on this build.
-   * The real report was `[Night Owl] FAILED to register:
-   * contextMenus.onShown (api missing)` - the event is simply absent on
-   * Chrome 152. Treating a cosmetic feature as a hard failure produced a
-   * scary red console error and worried the user for no reason. */
-  (function () {
-    var noShown = runBackground({ native: true, noApi: 'contextMenus.onShown' });
-    if (noShown.error) { bad('缺失事件（注入）', noShown.error); return; }
-    (noShown.regSkip && noShown.regSkip.indexOf('contextMenus.onShown') >= 0)
-      ? ok('缺失事件：onShown 被记为 optional-skipped')
-      : bad('缺失事件', 'REG_SKIP 未记录 onShown');
-    (!noShown.regFail || noShown.regFail.length === 0)
-      ? ok('缺失事件：不产生 REG_FAIL（不再误报为致命错误）')
-      : bad('缺失事件', '被误判为致命: ' + noShown.regFail.join(','));
-    // 命脉仍然全部就位（含兜底启用的 tabs.onActivated）
-    ['storageChanged', 'onAlarm', 'onCommand', 'onClicked', 'onInstalled', 'onStartup', 'onActivated']
-      .every(function (k) { return typeof noShown.listeners[k] === 'function'; })
-      ? ok('缺失事件：onShown 不在时其余 7 项照常注册')
-      : bad('缺失事件', '有监听器被连带拖死');
-    // 兜底路径接管：onShown 缺席时应改用 tabs.onActivated
-    (typeof noShown.listeners.onActivated === 'function')
-      ? ok('缺失事件：兜底启用 tabs.onActivated')
-      : bad('缺失事件', '兜底 tabs.onActivated 未注册');
-  })();
-
   // (b) importScripts 失败后的回退路径（就是农场主屏幕上那个 status code 15）
   var ep = runBackground({ native: false });
   if (ep.error) { bad('回退路径执行', ep.error); return; }
-  ep.missing.length ? bad('回退路径监听器', 'missing ' + ep.missing.join(',')) : ok('回退路径：7 个监听器全部注册');
+  ep.missing.length ? bad('回退路径监听器', 'missing ' + ep.missing.join(',')) : ok('回退路径：5 个监听器全部注册');
   var em = ep.box.NW && ep.box.NW.matcher;
   (em && typeof em.toggleSiteDark === 'function')
     ? ok('回退路径：NW.matcher 可用（require 分支）')
@@ -454,19 +428,11 @@ function runBackground(opts) {
    * must come back empty (not throw, not mis-map) when one is absent. */
   (function () {
     var names = ['storageChanged', 'onAlarm', 'onCommand',
-                 'onInstalled', 'onStartup', 'onShown', 'onClicked'];
+                 'onInstalled', 'onStartup'];
     var full = sw.listeners;
     var allOk = names.every(function (k) { return typeof full[k] === 'function'; });
-    allOk ? ok('解析器：7 个事件全部命中原对象')
+    allOk ? ok('解析器：5 个事件全部命中原对象')
           : bad('解析器', '未命中: ' + names.filter(function (k) { return typeof full[k] !== 'function'; }).join(','));
-
-    // 缺 onShown 时不能错配到别的对象上
-    var deg = runBackground({ native: true, noApi: 'contextMenus.onShown' });
-    (typeof deg.listeners.onShown !== 'function'
-      && typeof deg.listeners.onClicked === 'function'
-      && typeof deg.listeners.onInstalled === 'function')
-      ? ok('解析器：onShown 缺失时无错配，其余照常')
-      : bad('解析器', 'onShown 缺失导致了错配');
   })();
 
   /* 注：原先这里还有 nw:ping / nw:save / nw:read 的消息路由测试。
@@ -531,19 +497,6 @@ console.log('[8] broadcast（异步断言）');
       : bad('storage 广播', '未发送 nw:tick');
   });
 
-  // 右键菜单点击必须广播，且白名单要落盘
-  var r2 = runBackground({ native: true });
-  r2.listeners.onClicked({ menuItemId: 'nw-whitelist', pageUrl: 'https://example.com/' });
-  flush(function () {
-    r2.sent.indexOf('nw:tick') >= 0
-      ? ok('右键菜单 -> 广播 nw:tick')
-      : bad('右键菜单广播', '未发送 nw:tick');
-    var wl = r2.stored.config && r2.stored.config.lists && r2.stored.config.lists.whitelist;
-    (wl && wl.length === 1 && wl[0] === 'example.com')
-      ? ok('右键菜单 -> 白名单已落盘')
-      : bad('右键菜单落盘', JSON.stringify(wl));
-  });
-
   // 信号闹钟（UI 站点开关/保存后走的通道）必须广播 + 收敛徽标
   var r3 = runBackground({ native: true });
   var siteCfg = C.normalize({ mode: 'dark', lists: { blacklist: ['example.com'] } });
@@ -583,18 +536,6 @@ console.log('[8] broadcast（异步断言）');
     (r5.sent.length === sentBefore && cfg && cfg.mode === 'auto' && listsClean)
       ? ok('总开关关闭：快捷键不切换昼夜/站点，也不广播')
       : bad('快捷键关态未门控', JSON.stringify({ sent: r5.sent.length, before: sentBefore, m: cfg && cfg.mode }));
-  });
-
-  // 回归：总开关关闭时右键菜单白名单切换不生效，且菜单项本身置灰
-  var r6 = runBackground({ native: true, seedConfig: C.normalize({ enabled: false }) });
-  r6.listeners.onClicked({ menuItemId: 'nw-whitelist', pageUrl: 'https://example.com/' });
-  r6.listeners.onShown({ pageUrl: 'https://example.com/' });
-  flush(function () {
-    var wl = r6.stored.config && r6.stored.config.lists.whitelist;
-    var last = r6.menuUpdates[r6.menuUpdates.length - 1];
-    ((!wl || wl.length === 0) && last && last.id === 'nw-whitelist' && last.props && last.props.enabled === false)
-      ? ok('总开关关闭：右键白名单不生效，菜单项置灰 (enabled=false)')
-      : bad('右键关态', JSON.stringify({ wl: wl, updates: r6.menuUpdates }));
   });
 
   /* 回归：徽标只有一个全局值 —— 任何路径都不得写 per-tab。

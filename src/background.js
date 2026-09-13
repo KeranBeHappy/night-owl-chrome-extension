@@ -65,7 +65,6 @@ var MATCH = NW.matcher;
 
 var ALARM_SWITCH = 'nw-switch';
 var config = null;
-var menuUrl = null;      // URL the context menu last targeted
 var updating = false;    // true while we write storage ourselves (skip echo broadcast)
 
 /* Must match manifest.content_scripts.js order - used for late injection */
@@ -226,33 +225,6 @@ function on(name, target, fn, opts) {
 /* Shorthand: register against a computed candidate list. */
 function onEvent(name, fn, opts) {
   return on(name, resolveEvent(name), fn, opts);
-}
-
-/* ---------- context menu ---------- */
-
-function createMenus() {
-  if (!chrome.contextMenus) return;
-  try {
-    chrome.contextMenus.removeAll(function () {
-      if (chrome.runtime.lastError) return;
-      try {
-        chrome.contextMenus.create({
-          id: 'nw-whitelist',
-          title: i18n('ctxAddWhitelist'),
-          contexts: ['page', 'action']
-        }, function () { void chrome.runtime.lastError; });
-      } catch (e) { /* older/newer signatures differ; non-fatal */ }
-      try {
-        chrome.contextMenus.create({
-          id: 'nw-open-options',
-          title: i18n('ctxOpenOptions'),
-          contexts: ['action']
-        }, function () { void chrome.runtime.lastError; });
-      } catch (e) { }
-    });
-  } catch (e) {
-    console.warn('[Night Owl] context menu setup failed:', e && e.message);
-  }
 }
 
 /* ---------- config ---------- */
@@ -472,8 +444,8 @@ function broadcast(inject) {
 
 /* ---------- site helpers ---------- */
 
-/* whitelist-only toggle (context menu): add => also drop from blacklist so the
- * blacklist cannot drag it back to dark. */
+/* whitelist-only toggle (site switch command): add => also drop from blacklist
+ * so the blacklist cannot drag it back to dark. */
 function toggleWhitelistFor(url) {
   if (!url || !MATCH) return;
   MATCH.toggleWhitelist(config, url);
@@ -481,22 +453,6 @@ function toggleWhitelistFor(url) {
 
 function isHttpUrl(url) {
   return typeof url === 'string' && url.indexOf('http') === 0;
-}
-
-function refreshMenuTitle(url) {
-  if (!isHttpUrl(url) || !MATCH || !chrome.contextMenus) return;
-  menuUrl = url;
-  var inList = MATCH.inWhitelist(config, url);
-  try {
-    chrome.contextMenus.update('nw-whitelist', {
-      title: inList ? i18n('ctxRemoveWhitelist') : i18n('ctxAddWhitelist'),
-      /* 总开关关闭时把菜单项一并置灰：用户在菜单层就能看到"为什么不可用" */
-      enabled: !!(config && config.enabled)
-    }, function () {
-      void chrome.runtime.lastError;
-      try { if (chrome.contextMenus.refresh) chrome.contextMenus.refresh(); } catch (e) { }
-    });
-  } catch (e) { }
 }
 
 /* flip day/night based on the CURRENT effective state。
@@ -627,7 +583,6 @@ onEvent('commands.onCommand', function (command) {
 onEvent('runtime.onInstalled', function () {
   loadConfig()
     .then(function () { return saveConfig(config, true); })
-    .then(function () { createMenus(); })
     .catch(function () { });
 });
 
@@ -638,64 +593,6 @@ onEvent('runtime.onStartup', function () {
     syncBadge('startup');
   }).catch(function () { });
 });
-
-/* (7) contextMenus.onShown - rewrite the label before the menu appears.
- * OPTIONAL: not every Chrome build exposes this event. When it is missing we
- * simply lose the proactive label refresh - the menu item still works, because
- * refreshMenuTitle() is also called from onClicked's data path and the title
- * falls back to a generic "add to whitelist". Degrading quietly is correct
- * here; treating it as a hard failure produced a scary red console error for
- * a purely cosmetic capability. */
-onEvent('contextMenus.onShown', function (info) {
-  var url = (info && (info.pageUrl || info.frameUrl)) || '';
-  if (isHttpUrl(url)) {
-    loadConfig().then(function () { refreshMenuTitle(url); }).catch(function () { });
-    return;
-  }
-  cbCall(chrome.tabs.query, { active: true, currentWindow: true }).then(function (tabs) {
-    if (!tabs || !tabs[0] || !tabs[0].url) return;
-    var fallback = tabs[0].url;
-    loadConfig().then(function () { refreshMenuTitle(fallback); }).catch(function () { });
-  }).catch(function () { });
-}, { optional: true });
-
-/* (8) contextMenus.onClicked */
-onEvent('contextMenus.onClicked', function (info) {
-  if (!info) return;
-  if (info.menuItemId === 'nw-whitelist') {
-    var url = info.pageUrl || info.frameUrl || menuUrl;
-    loadConfig().then(function () {
-      /* 总开关是最顶层条件：关闭时站点白名单切换不生效（菜单项已置灰，这里兜底） */
-      if (!config || !config.enabled) return null;
-      toggleWhitelistFor(url);
-      return saveConfig(config, true);
-    }).then(function () {
-      /* Self-heal the label. onShown is the nice path but it is not available
-       * on every build, so after each click we re-sync the title ourselves -
-       * that keeps the next open showing the correct add/remove wording even
-       * when onShown never fires. */
-      if (url) refreshMenuTitle(url);
-    }).catch(function () { });
-    return;
-  }
-  if (info.menuItemId === 'nw-open-options') {
-    try { chrome.runtime.openOptionsPage(); } catch (e) { }
-  }
-});
-
-/* (9) tabs.onActivated - also refresh the label on tab switches.
- * Cheap and only useful when onShown is missing; guarded so we do not add a
- * listener that is not needed on builds that have the real event. */
-if (!chrome.contextMenus || !chrome.contextMenus.onShown) {
-  onEvent('tabs.onActivated', function (info) {
-    if (!info || !info.tabId) return;
-    cbCall(chrome.tabs.get, info.tabId).then(function (tab) {
-      if (tab && tab.url) {
-        loadConfig().then(function () { refreshMenuTitle(tab.url); }).catch(function () { });
-      }
-    }).catch(function () { });
-  }, { optional: true });
-}
 
 /* ---------- startup ---------- */
 
@@ -721,9 +618,9 @@ function report() {
     console.warn('[Night Owl] optional features unavailable on this Chrome build: ' + soft.join(' | '));
   }
 
-  /* 监听器总数 = onEvent 调用点数量（tabs.onActivated 是条件注册，两个分支
-   * 互斥，所以恒等于 8）。改监听器数量时这里和 check.js 的断言要同步。 */
-  var okn = 8 - REG_FAIL.length - REG_SKIP.length;
+  /* 监听器总数 = onEvent 调用点数量（移除右键菜单后剩 5 个）。
+   * 改监听器数量时这里和 check.js 的断言要同步。 */
+  var okn = 5 - REG_FAIL.length - REG_SKIP.length;
   console.log('[Night Owl] ready - listeners ok=' + okn
     + ' failed=' + REG_FAIL.length
     + ' optional-skipped=' + REG_SKIP.length
@@ -731,17 +628,8 @@ function report() {
     + ' native=' + NATIVE_OK);
 }
 
-if (NATIVE_OK) {
-  loadConfig().then(function () {
-    scheduleNext();
-    syncBadge('startup');
-    report();
-  }).catch(function () { report(); });
-} else {
-  loadConfig().then(function () {
-    createMenus();
-    scheduleNext();
-    syncBadge('startup');
-    report();
-  }).catch(function () { report(); });
-}
+loadConfig().then(function () {
+  scheduleNext();
+  syncBadge('startup');
+  report();
+}).catch(function () { report(); });

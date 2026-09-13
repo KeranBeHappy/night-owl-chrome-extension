@@ -138,14 +138,26 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
   border-radius: var(--radius);
   margin-bottom: 12px;
 }
-.site-name {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
+/* 站点行首：URL 左（过长省略）、说明文案右，同一行 */
+.site-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 7px;
+}
+.site-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.site-hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
 }
 .site-seg { background: var(--bg); }
 .site-seg button { padding: 6px 0; font-size: 11px; }

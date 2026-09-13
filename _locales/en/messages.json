@@ -12,20 +12,8 @@
     "description": "Shortcut description"
   },
   "cmdToggleSite": {
-    "message": "Add or remove the current site from the whitelist",
+    "message": "Add or remove the current site from the always-day list",
     "description": "Shortcut description"
-  },
-  "ctxAddWhitelist": {
-    "message": "Add this site to the whitelist",
-    "description": "Context menu item"
-  },
-  "ctxRemoveWhitelist": {
-    "message": "Remove this site from the whitelist",
-    "description": "Context menu item"
-  },
-  "ctxOpenOptions": {
-    "message": "Open Night Owl settings",
-    "description": "Context menu item"
   },
   "popupMaster": {
     "message": "Night Owl",
@@ -74,6 +62,10 @@
   "popupSiteLight": {
     "message": "Day",
     "description": "Site tri-state: force light"
+  },
+  "popupSiteHint": {
+    "message": "Always use the mode below",
+    "description": "Site row hint: this URL always follows the selected mode below"
   },
   "popupManual": {
     "message": "Manual: $MODE$",
@@ -393,25 +385,37 @@
     "message": "Button",
     "description": "Preview"
   },
-  "lblBlacklistBox": {
-    "message": "Blacklist — these sites go dark",
+  "lblAlwaysDarkBox": {
+    "message": "Always night — these sites go dark",
     "description": "Group label"
   },
-  "lblWhitelistBox": {
-    "message": "Whitelist — these sites stay as they are",
+  "lblAlwaysLightBox": {
+    "message": "Always day — these sites stay as they are",
     "description": "Group label"
   },
-  "hintBlacklist": {
+  "hintAlwaysDark": {
     "message": "Sites here always use dark mode, even in daytime hours.",
     "description": "Hint"
   },
-  "hintWhitelist": {
-    "message": "Sites here always keep their original colors. This outranks the blacklist, and it is what the right-click menu edits.",
+  "hintAlwaysLight": {
+    "message": "Sites here always keep their original colors. This outranks the always-night list.",
     "description": "Hint"
   },
   "btnAdd": {
     "message": "Add",
     "description": "Button"
+  },
+  "btnAddSite": {
+    "message": "Add",
+    "description": "Add button next to the current site"
+  },
+  "btnAddLight": {
+    "message": "Always day",
+    "description": "Add the current site to the always-day list"
+  },
+  "btnAddDark": {
+    "message": "Always night",
+    "description": "Add the current site to the always-night list"
   },
   "btnRemove": {
     "message": "Remove",

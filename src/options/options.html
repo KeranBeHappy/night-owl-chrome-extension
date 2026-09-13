@@ -199,8 +199,8 @@
   <section data-panel="lists">
 
     <div class="card">
-      <div class="label" data-i18n="lblBlacklistBox"></div>
-      <div class="hint" data-i18n="hintBlacklist"></div>
+      <div class="label" data-i18n="lblAlwaysDarkBox"></div>
+      <div class="hint" data-i18n="hintAlwaysDark"></div>
       <div class="rule-list" id="blacklistView"></div>
       <div class="rule-add">
         <input type="text" id="blacklistInput" spellcheck="false" autocomplete="off">
@@ -209,8 +209,8 @@
     </div>
 
     <div class="card">
-      <div class="label" data-i18n="lblWhitelistBox"></div>
-      <div class="hint" data-i18n="hintWhitelist"></div>
+      <div class="label" data-i18n="lblAlwaysLightBox"></div>
+      <div class="hint" data-i18n="hintAlwaysLight"></div>
       <div class="rule-list" id="whitelistView"></div>
       <div class="rule-add">
         <input type="text" id="whitelistInput" spellcheck="false" autocomplete="off">
@@ -223,6 +223,11 @@
       <div class="current-site">
         <span class="label" data-i18n="lblCurrentSite"></span>
         <code id="currentSite">—</code>
+        <button type="button" class="btn-link" id="addCurrentBtn" data-i18n="btnAddSite"></button>
+        <span class="add-menu" id="addCurrentMenu" hidden>
+          <button type="button" class="btn-link" id="addCurrentLight"></button>
+          <button type="button" class="btn-link" id="addCurrentDark"></button>
+        </span>
       </div>
     </div>
 
@@ -317,6 +322,7 @@
 </div>
 
   <script src="../lib/config.js"></script>
+  <script src="../lib/matcher.js"></script>
   <script src="../lib/sun.js"></script>
   <script src="../lib/filter.js"></script>
   <script src="../lib/cities.data.js"></script>

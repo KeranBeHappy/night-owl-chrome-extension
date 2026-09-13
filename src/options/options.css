@@ -487,6 +487,23 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
 
 .inline-status { font-size: 12px; color: var(--muted); }
 
+/* 纯文字按钮：无边框无底色，像链接一样轻量；用于「当前站点」旁的添加操作 */
+.btn-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.btn-link:hover { text-decoration: underline; }
+.btn-link:disabled { color: var(--muted); cursor: not-allowed; text-decoration: none; }
+
+.add-menu { display: inline-flex; gap: 10px; }
+.add-menu[hidden] { display: none; }
+
 .foot {
   margin-top: 22px;
   font-size: 12px;

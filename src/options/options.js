@@ -7,6 +7,7 @@
   var FILTER = window.NW.filter;
   var GEO = window.NW.geo;
   var STORE = window.NW.store;
+  var MATCH = window.NW.matcher;
 
   var config = null;
   var currentUrl = null;
@@ -200,6 +201,40 @@
     renderList('whitelist');
   }
 
+  /* 当前站点「添加」：把最近访问的网页加入 始终白天 / 始终夜间 名单。
+   * 复用 matcher.setSiteMode —— 它内部就是「互斥 + 去重」：加 A 会先清掉 B 里
+   * 匹配该站点的规则，已在 A 则不再重复，与 popup 的站点三态语义完全一致。 */
+  function addCurrentSite(mode) {
+    if (!currentUrl || !MATCH) return;
+    // 规则生成失败（无 host 可提取）时 setSiteMode 返回 false，直接忽略
+    if (!MATCH.setSiteMode(config, currentUrl, mode)) return;
+    renderLists();
+    syncCurrentSite();
+    $('addCurrentMenu').hidden = true;
+    save();
+  }
+
+  /* 按当前站点所属名单刷新「添加」按钮与两个子选项：
+   * 已加入的目标显示 ✓ 并禁用（去重）；当前站点不可用时禁用「添加」并收起子选项。 */
+  function syncCurrentSite() {
+    var btn = $('addCurrentBtn');
+    var menu = $('addCurrentMenu');
+    if (!currentUrl) {
+      btn.disabled = true;
+      menu.hidden = true;
+      return;
+    }
+    btn.disabled = false;
+    var mode = 'follow';
+    try { mode = MATCH.siteMode(config, currentUrl); } catch (e) {}
+    var light = $('addCurrentLight');
+    var dark = $('addCurrentDark');
+    light.disabled = (mode === 'light');
+    dark.disabled = (mode === 'dark');
+    light.textContent = (mode === 'light' ? '\u2713 ' : '') + msg('btnAddLight');
+    dark.textContent = (mode === 'dark' ? '\u2713 ' : '') + msg('btnAddDark');
+  }
+
   /* 总开关是最顶层条件：关闭时昼夜模式不可切换（与 popup 同一套门控语义），
    * 同时显示提示，避免"点了没反应"被当成 bug。 */
   function syncModeGate() {
@@ -244,6 +279,7 @@
     renderComputed();
     refreshCity();
     applyTheme();
+    syncCurrentSite();
   }
 
   function syncOutputs() {
@@ -603,6 +639,23 @@
         save();
       });
     }
+
+    // 当前站点「添加」：点「添加」展开两个子选项，点其一即加入对应名单
+    var addBtn = $('addCurrentBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        if (addBtn.disabled) return;
+        $('addCurrentMenu').hidden = !$('addCurrentMenu').hidden;
+      });
+      $('addCurrentLight').addEventListener('click', function () {
+        if ($('addCurrentLight').disabled) return;
+        addCurrentSite('light');
+      });
+      $('addCurrentDark').addEventListener('click', function () {
+        if ($('addCurrentDark').disabled) return;
+        addCurrentSite('dark');
+      });
+    }
   }
 
   function bindAdvanced() {
@@ -740,5 +793,6 @@
     var host = null;
     try { host = new URL(currentUrl).hostname; } catch (e) {}
     $('currentSite').textContent = host || '—';
+    syncCurrentSite();
   });
 })();

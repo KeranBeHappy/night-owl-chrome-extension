@@ -4,7 +4,7 @@
     "description": "扩展名称"
   },
   "extDesc": {
-    "message": "为所有网页自动开启夜间模式。支持日出日落定时、亮度与色温调节、站点黑白名单。",
+    "message": "为所有网页自动开启夜间模式。支持日出日落定时、亮度与色温调节、站点始终夜间 / 始终白天名单。",
     "description": "扩展描述"
   },
   "cmdToggleMode": {
@@ -12,20 +12,8 @@
     "description": "快捷键说明"
   },
   "cmdToggleSite": {
-    "message": "把当前站点加入或移出白名单",
+    "message": "把当前站点加入或移出始终白天名单",
     "description": "快捷键说明"
-  },
-  "ctxAddWhitelist": {
-    "message": "把此站点加入白名单",
-    "description": "右键菜单"
-  },
-  "ctxRemoveWhitelist": {
-    "message": "把此站点移出白名单",
-    "description": "右键菜单"
-  },
-  "ctxOpenOptions": {
-    "message": "打开 Night Owl 设置",
-    "description": "右键菜单"
   },
   "popupMaster": {
     "message": "Night Owl",
@@ -74,6 +62,10 @@
   "popupSiteLight": {
     "message": "白天",
     "description": "站点三态：强制白天"
+  },
+  "popupSiteHint": {
+    "message": "始终按下方模式生效",
+    "description": "站点行说明：此网址按下方所选模式持续生效"
   },
   "popupManual": {
     "message": "手动：$MODE$",
@@ -156,7 +148,7 @@
     "description": "其他 tab：本地文件说明"
   },
   "hintOtherNormal": {
-    "message": "普通网页不受上述限制。若某个网页没有按预期变暗，可先用弹窗底部的站点三态开关或设置页的黑白名单排查。",
+    "message": "普通网页不受上述限制。若某个网页没有按预期变暗，可先用弹窗底部的站点三态开关或设置页的始终夜间 / 始终白天名单排查。",
     "description": "其他 tab：普通页面说明与排查指引"
   },
   "popupNotNow": {
@@ -393,25 +385,37 @@
     "message": "按钮",
     "description": "预览"
   },
-  "lblBlacklistBox": {
-    "message": "黑名单 — 这些网址变暗",
+  "lblAlwaysDarkBox": {
+    "message": "始终夜间 — 这些网址始终变暗",
     "description": "分组标题"
   },
-  "lblWhitelistBox": {
-    "message": "白名单 — 这些网址不变暗",
+  "lblAlwaysLightBox": {
+    "message": "始终白天 — 这些网址始终不变暗",
     "description": "分组标题"
   },
-  "hintBlacklist": {
+  "hintAlwaysDark": {
     "message": "列表中的网址始终启用夜间模式，即使当前处于白天时段。",
     "description": "说明"
   },
-  "hintWhitelist": {
-    "message": "列表中的网址始终保持原始配色，优先级高于黑名单；右键菜单操作的就是它。",
+  "hintAlwaysLight": {
+    "message": "列表中的网址始终保持原始配色，优先级高于始终夜间名单。",
     "description": "说明"
   },
   "btnAdd": {
     "message": "确定",
     "description": "按钮"
+  },
+  "btnAddSite": {
+    "message": "添加",
+    "description": "当前站点旁的添加按钮"
+  },
+  "btnAddLight": {
+    "message": "始终白天",
+    "description": "把当前站点加入始终白天名单"
+  },
+  "btnAddDark": {
+    "message": "始终夜间",
+    "description": "把当前站点加入始终夜间名单"
   },
   "btnRemove": {
     "message": "移除",

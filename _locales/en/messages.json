@@ -326,32 +326,60 @@
     "description": "Slider"
   },
   "hintInvert": {
-    "message": "How far colors are inverted. Lower values give a softer, greyer night.",
+    "message": "How dark the night is. 100 is a pure black background with white text; lower values are softer and greyer.",
     "description": "Hint"
   },
   "lblBrightness": {
     "message": "Brightness",
     "description": "Slider"
   },
+  "hintBrightness": {
+    "message": "Overall lightness. Above 100 is brighter, below 100 is darker — a fine tune on top of the night effect.",
+    "description": "Hint"
+  },
   "lblContrast": {
     "message": "Contrast",
     "description": "Slider"
+  },
+  "hintContrast": {
+    "message": "Contrast between text and background. Higher makes text crisper; lower is softer and flatter.",
+    "description": "Hint"
   },
   "lblSaturation": {
     "message": "Saturation",
     "description": "Slider"
   },
+  "hintSaturation": {
+    "message": "How vivid colors are. 0 is fully grayscale, 100 is original, above 100 is more vivid.",
+    "description": "Hint"
+  },
   "lblWarmth": {
     "message": "Color temperature",
     "description": "Slider"
+  },
+  "hintWarmth": {
+    "message": "Tint the page warm (yellow) or cool (blue). Note: it only shifts colored elements slightly; white text and gray backgrounds stay mostly unchanged.",
+    "description": "Hint"
   },
   "lblGrayscale": {
     "message": "Grayscale",
     "description": "Slider"
   },
+  "hintGrayscale": {
+    "message": "Turn the page black-and-white. Night mode is already near-grayscale, so this adds little; 100 is fully grayscale.",
+    "description": "Hint"
+  },
   "btnResetAppearance": {
     "message": "Reset appearance",
     "description": "Button"
+  },
+  "btnMoreOptions": {
+    "message": "More options",
+    "description": "Button: expand more appearance options"
+  },
+  "btnResetMediaDim": {
+    "message": "Reset",
+    "description": "Button: reset media brightness to default"
   },
   "previewHeading": {
     "message": "Heading text",
@@ -410,7 +438,15 @@
     "description": "Option"
   },
   "hintPreserveMedia": {
-    "message": "Images, videos and canvas are inverted back. Turn off if a site renders its UI inside a canvas.",
+    "message": "Images, videos and canvas are restored to their daytime colors (only slightly dimmed) and are unaffected by temperature, grayscale, brightness or contrast. Turn off if a site renders its UI inside a canvas.",
+    "description": "Hint"
+  },
+  "lblMediaDim": {
+    "message": "Media brightness",
+    "description": "Option"
+  },
+  "hintMediaDim": {
+    "message": "In dark mode, images and videos keep their daytime colors, dimmed overall to this level; 100% matches daytime. Only applies while \"Keep photos and videos in original colors\" above is on, and is included in config export / import.",
     "description": "Hint"
   },
   "lblSkipDark": {

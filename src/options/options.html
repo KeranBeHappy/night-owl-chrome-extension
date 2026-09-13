@@ -147,6 +147,7 @@
           <output id="brightnessOut"></output>
         </div>
         <input type="range" id="brightness" min="40" max="150" step="1">
+        <div class="hint" data-i18n="hintBrightness"></div>
       </div>
 
       <div class="slider">
@@ -155,6 +156,7 @@
           <output id="contrastOut"></output>
         </div>
         <input type="range" id="contrast" min="50" max="150" step="1">
+        <div class="hint" data-i18n="hintContrast"></div>
       </div>
 
       <div class="slider">
@@ -163,22 +165,30 @@
           <output id="saturationOut"></output>
         </div>
         <input type="range" id="saturation" min="0" max="150" step="1">
+        <div class="hint" data-i18n="hintSaturation"></div>
       </div>
 
-      <div class="slider">
-        <div class="slider-head">
-          <label for="temperature" data-i18n="lblWarmth"></label>
-          <output id="temperatureOut"></output>
-        </div>
-        <input type="range" id="temperature" min="-100" max="100" step="1">
-      </div>
+      <div class="collapse">
+        <div class="collapse-body" id="advancedOptions">
+          <div class="slider">
+            <div class="slider-head">
+              <label for="temperature" data-i18n="lblWarmth"></label>
+              <output id="temperatureOut"></output>
+            </div>
+            <input type="range" id="temperature" min="-100" max="100" step="1">
+            <div class="hint" data-i18n="hintWarmth"></div>
+          </div>
 
-      <div class="slider">
-        <div class="slider-head">
-          <label for="grayscale" data-i18n="lblGrayscale"></label>
-          <output id="grayscaleOut"></output>
+          <div class="slider">
+            <div class="slider-head">
+              <label for="grayscale" data-i18n="lblGrayscale"></label>
+              <output id="grayscaleOut"></output>
+            </div>
+            <input type="range" id="grayscale" min="0" max="100" step="1">
+            <div class="hint" data-i18n="hintGrayscale"></div>
+          </div>
         </div>
-        <input type="range" id="grayscale" min="0" max="100" step="1">
+        <button type="button" class="collapse-header" id="toggleAdvanced" data-i18n="btnMoreOptions" aria-expanded="false"></button>
       </div>
 
       <button type="button" class="btn" id="resetAppearance" data-i18n="btnResetAppearance"></button>
@@ -230,6 +240,21 @@
           <input type="checkbox" id="preserveMedia">
           <span class="track"><span class="knob"></span></span>
         </label>
+      </div>
+      <div class="slider" id="mediaDimRow">
+        <div class="slider-head">
+          <label for="mediaDim" data-i18n="lblMediaDim"></label>
+          <span class="slider-val">
+            <output id="mediaDimOut"></output>
+            <button type="button" class="btn btn-mini" id="resetMediaDim" data-i18n="btnResetMediaDim"></button>
+          </span>
+        </div>
+        <input type="range" id="mediaDim" min="60" max="100" step="1">
+        <div class="hint" data-i18n="hintMediaDim"></div>
+        <!-- 示例图：演示「媒体亮度」——黑夜模式下图片保持原色、只整体压暗（深色底模拟黑夜页面） -->
+        <div class="media-preview">
+          <img class="preview-media" id="previewMedia" src="../../icons/icon128.png" alt="">
+        </div>
       </div>
     </div>
 

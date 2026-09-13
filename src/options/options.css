@@ -253,6 +253,51 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .slider { margin-bottom: 16px; }
+/* 媒体亮度滑杆块：与上方「保护图片/视频」开关行拉开间距，避免贴太近 */
+#mediaDimRow { margin-top: 12px; }
+/* 「更多选项」折叠触发器：无边框无底色的居中纯文字，展开时箭头旋转（▾→▴）；
+ * 颜色走变量、两套主题兼容 */
+.collapse { margin-bottom: 12px; }
+.collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  gap: 8px;
+}
+.collapse-header:hover { color: var(--accent); }
+/* 圆头线条箭头（chevron）：SVG 的 stroke-linecap/linejoin=round 才是真正的圆头，
+ * 纯 CSS 边框做的 chevron 再怎么加 border-radius 也只能是圆角。
+ * 用 mask 裁出 SVG 形状、background-color 取 currentColor，hover / 换肤自动跟随。
+ * ⚠️ 箭头必须留在 ::after 里：按钮文案由 i18n 写 textContent，内联子元素会被清掉。
+ * data URI 无法换行，故下面两行偏长（唯一突破 100 字符的地方）。 */
+.collapse-header::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M2.5 2 6 5.5 9.5 2' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat center / contain;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path d='M2.5 2 6 5.5 9.5 2' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat center / contain;
+  transition: transform .4s ease;
+}
+.collapse-header.open::after {
+  transform: rotate(180deg);
+}
+/* 折叠体：用 max-height 过渡实现平滑展开/收起（display 无法过渡） */
+.collapse-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .4s ease;
+}
+.collapse-body.open { max-height: 400px; }
 .slider-head {
   display: flex;
   justify-content: space-between;
@@ -300,6 +345,23 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
 }
 .preview-page h3 { margin: 0 0 8px; font-size: 15px; font-weight: 500; }
 .preview-page p { margin: 0 0 14px; font-size: 13px; color: #3a3a3a; }
+/* 示例图：演示「媒体亮度」（黑夜模式图片保持原色、只整体压暗），滤镜由 options.js 实时写入 */
+.preview-media {
+  display: block;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 0 0 14px;
+}
+/* 「高级」里示例图的深色底：模拟黑夜页面的背景，让"媒体只压暗"的效果直观可见 */
+.media-preview {
+  margin-top: 12px;
+  padding: 12px;
+  background: #141414;
+  border-radius: 8px;
+}
+.media-preview .preview-media { margin: 0; }
 .preview-btn {
   border: 1px solid #2f6fd0;
   background: #3b7dd8;
@@ -342,6 +404,10 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
 }
 .btn:hover { border-color: var(--accent); }
 .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: not-allowed; border-color: var(--line); color: var(--muted); }
+/* 滑杆行内：数值与「恢复默认」小按钮同行右对齐 */
+.btn-mini { padding: 2px 8px; font-size: 11px; }
+.slider-val { display: inline-flex; align-items: baseline; gap: 8px; }
 
 .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 

@@ -43,6 +43,7 @@
     },
     advanced: {
       preserveMedia: true,       // 图片/视频反向还原
+      mediaDim: 92,              // 媒体亮度 %（60–100）：黑夜模式下媒体保持白天原色、整体压暗到该值
       skipDarkSites: true,       // 跳过本身已是深色的站点
       target: 'html'             // 'html' | 'body'
     }
@@ -108,6 +109,7 @@
     if (MODES.indexOf(c.mode) < 0) c.mode = 'auto';
     if (SCHEDULE_TYPES.indexOf(c.schedule.type) < 0) c.schedule.type = 'sun';
     if (TARGETS.indexOf(c.advanced.target) < 0) c.advanced.target = 'html';
+    c.advanced.mediaDim = Math.round(clamp(c.advanced.mediaDim, 60, 100));
 
     /* 手动模式（黑夜/白天）只在"当下这个时段"生效，到下一个自然切换点自动
      * 回落到 auto。闹钟可能因 Service Worker 休眠、浏览器重启而缺席，因此这里

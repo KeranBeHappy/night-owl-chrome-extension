@@ -229,6 +229,7 @@
     $('saturation').value = config.theme.saturation;
     $('temperature').value = config.theme.temperature;
     $('grayscale').value = config.theme.grayscale;
+    $('mediaDim').value = config.advanced.mediaDim;
     syncOutputs();
 
     setRadio('target', config.advanced.target);
@@ -236,6 +237,7 @@
 
     $('preserveMedia').checked = !!config.advanced.preserveMedia;
     $('skipDark').checked = !!config.advanced.skipDarkSites;
+    syncMediaDimGate();
 
     toggleScheduleFields();
     updatePreview();
@@ -250,8 +252,28 @@
     $('contrastOut').textContent = config.theme.contrast + '%';
     $('saturationOut').textContent = config.theme.saturation + '%';
     $('grayscaleOut').textContent = config.theme.grayscale + '%';
+    $('mediaDimOut').textContent = config.advanced.mediaDim + '%';
+    syncMediaDimReset();
     var t = config.theme.temperature;
     $('temperatureOut').textContent = t > 0 ? '+' + t : String(t);
+  }
+
+  /* 「媒体亮度」只在"保留原始色彩"开启时才有意义（关掉后媒体跟随整页一起被调），
+   * 所以开关关闭时把滑杆置灰，避免"调了没反应"被当成 bug。 */
+  function syncMediaDimGate() {
+    var on = !!config.advanced.preserveMedia;
+    $('mediaDim').disabled = !on;
+    var row = $('mediaDimRow');
+    if (row) row.classList.toggle('off', !on);
+    syncMediaDimReset();
+  }
+
+  /** 媒体亮度「恢复默认」按钮：媒体保真关闭、或已是默认值 92 时置灰禁用 */
+  function syncMediaDimReset() {
+    var btn = $('resetMediaDim');
+    if (!btn) return;
+    var isDefault = config.advanced.mediaDim === CFG.DEFAULTS.advanced.mediaDim;
+    btn.disabled = !config.advanced.preserveMedia || isDefault;
   }
 
   function toggleScheduleFields() {
@@ -263,6 +285,15 @@
 
   function updatePreview() {
     $('previewPage').style.filter = FILTER.build(config.theme);
+    /* 「高级」里的示例图演示媒体在黑夜模式下的**净效果** = 白天原色 × 媒体亮度。
+     * 真实页面里：媒体子级做逆运算、父级再套页面滤镜，两者相抵后只剩这层压暗；
+     * 这里没有页面滤镜，所以直接给图套一层 brightness(媒体亮度) 即可，不必套 buildMedia。 */
+    var img = $('previewMedia');
+    if (img) {
+      img.style.filter = config.advanced.preserveMedia
+        ? 'brightness(' + (config.advanced.mediaDim / 100).toFixed(3) + ')'
+        : 'none';
+    }
   }
 
   function renderComputed() {
@@ -523,6 +554,14 @@
       render();
       save();
     });
+
+    // 「更多选项」折叠：默认收起，点击切换色温 / 黑白程度两滑杆的显示
+    $('toggleAdvanced').addEventListener('click', function () {
+      var box = $('advancedOptions');
+      var open = box.classList.toggle('open');
+      $('toggleAdvanced').classList.toggle('open', open);
+      $('toggleAdvanced').setAttribute('aria-expanded', String(open));
+    });
   }
 
   function bindLists() {
@@ -569,6 +608,23 @@
   function bindAdvanced() {
     $('preserveMedia').addEventListener('change', function (e) {
       config.advanced.preserveMedia = e.target.checked;
+      syncMediaDimGate();
+      save();
+    });
+    $('mediaDim').addEventListener('input', function (e) {
+      config.advanced.mediaDim = parseInt(e.target.value, 10);
+      syncOutputs();
+      updatePreview();
+    });
+    $('mediaDim').addEventListener('change', function () {
+      save(true);
+    });
+    // 媒体亮度「恢复默认」：写回默认值并刷新滑杆 / 数值 / 示例图 / 落盘
+    $('resetMediaDim').addEventListener('click', function () {
+      if ($('resetMediaDim').disabled) return;
+      config.advanced.mediaDim = CFG.DEFAULTS.advanced.mediaDim;
+      syncOutputs();
+      updatePreview();
       save();
     });
     $('skipDark').addEventListener('change', function (e) {

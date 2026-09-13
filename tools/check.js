@@ -1249,15 +1249,13 @@ afterSections(function () {
 
 /* [10] preserveMedia 滤镜数学（媒体还原的正确性）
  *
- * 本轮修复的回归守卫。
+ * 现场症状（2026-09-11 首次 / 2026-09-13 用户复查）：黑夜模式下网页图片观感不对
+ * —— 发灰、偏色、变浑浊（用户报"图片元素很奇怪"）。
  *
- * 现场症状：设置页「保留图片与视频的原始色彩」无论开关，网页图片都反色。
- *
- * 根因（真实 Chromium 像素实测，tools/e2e.js）：
- *   CSS filter 里 invert(k) 可逆 当且仅当 k=1；hue-rotate(180deg) 在 linearRGB
- *   做色相矩阵，高饱和色会超色域被 clamp，同样不可逆。
- *   旧父级 = invert(0.92) hue180 saturate(0.9) sepia(0.075) 是四重不可逆叠加，
- *   子级怎么补偿都还原不了 —— 实测 8 源色平均色差 Δ=154。
+ * 硬约束：父级滤镜作用在 html 上，CSS **没有**把媒体子树"摘出去"的 API，
+ * 所以"图片保持原样"只能靠媒体子级做**精确逆运算**。这要求父级只用可反向算子：
+ *   invert(1) / hue-rotate / brightness / contrast / saturate —— 可反向；
+ *   sepia（色温）、grayscale（灰度）—— 不可反向，一旦用在父级，图片必然偏色/发灰。
  *
  * 这些断言锁死修复后的不变量：
  *   a) preserveMedia 开启 -> 父级 invert 必须是 1（可逆前提）
@@ -1266,6 +1264,12 @@ afterSections(function () {
  *   d) 父子两侧的 invert 参数互为逆（1 与 1）
  *   e) preserveMedia 关闭 -> 不生成媒体规则（图片跟随父级变暗）
  *   f) 用户调饱和时，媒体子级出现 1/s 反向补偿
+ *   g) **父级绝不出现 sepia / grayscale**（不可反向）—— 色温改用 hue-rotate+saturate，
+ *      灰度折进 saturate(1-g)，两者都可被媒体精确反向
+ *   h) 媒体子级含固定压暗 brightness(0.92) 且排在逆运算最前（= 只比白天暗一档）
+ *   i) 父级 brightness / contrast 都被媒体反向补偿
+ *   j) 色温冷/暖方向相反且媒体取反
+ *   k) 媒体选择器覆盖 img/video/canvas…，含 svg:has(image) 与 [data-nw-preserve]
  */
 afterSections(function () {
   console.log('[10] preserveMedia 滤镜数学');
@@ -1331,6 +1335,65 @@ afterSections(function () {
   (FC.buildMedia(offSatCfg.theme, offSatCfg) === 'none')
     ? ok('保留关：无饱和补偿（媒体规则不存在）')
     : bad('保留关饱和', '媒体规则应为 none');
+
+  /* (h) 父级绝不出现 sepia / grayscale —— 本轮修复的核心回归守卫。
+   * 它们不可反向，一旦回到父级，媒体再多补偿也还原不了（用户报的"图片奇怪"）。
+   * 色温必须表达成 hue-rotate+saturate，灰度必须折进 saturate(1-g)。 */
+  var grayCfg = CC.normalize({ theme: { grayscale: 50, temperature: 60 }, advanced: { preserveMedia: true } });
+  var grayParent = FC.build(grayCfg.theme, grayCfg);
+  (!/sepia\(/.test(grayParent) && !/grayscale\(/.test(grayParent))
+    ? ok('父级无不可反向算子：不含 sepia / grayscale')
+    : bad('父级含不可反向算子', grayParent);
+
+  // (i) 灰度折进 saturate：grayscale(50) 等价 saturate(0.5)，媒体反向为 saturate(2)
+  var grayMedia = FC.buildMedia(grayCfg.theme, grayCfg);
+  (/saturate\(0\.450\)/.test(grayParent) && /saturate\(2\.222\)/.test(grayMedia))
+    ? ok('灰度折进 saturate：父级 saturate(0.45)、媒体 saturate(2.222) 精确反向')
+    : bad('灰度折进 saturate', JSON.stringify({ p: grayParent, m: grayMedia }));
+
+  /* (j) 媒体固定压暗：brightness(0.92) 必须排在逆运算最前（否则会被父级 invert 反过来） */
+  var onFirst = String(onMedia).split(' ')[0];
+  (onFirst === 'brightness(0.920)')
+    ? ok('媒体固定压暗：brightness(0.920) 居首（比白天暗一档）')
+    : bad('媒体压暗', 'got ' + onFirst + '，期望 brightness(0.920) 居首');
+
+  // (k) 亮度 / 对比度反向补偿
+  var bcCfg = CC.normalize({ theme: { brightness: 80, contrast: 120 }, advanced: { preserveMedia: true } });
+  var bcParent = FC.build(bcCfg.theme, bcCfg);
+  var bcMedia = FC.buildMedia(bcCfg.theme, bcCfg);
+  (/brightness\(0\.800\)/.test(bcParent) && /brightness\(1\.250\)/.test(bcMedia) &&
+    /contrast\(1\.200\)/.test(bcParent) && /contrast\(0\.833\)/.test(bcMedia))
+    ? ok('亮度/对比度补偿：父级 0.8/1.2 -> 媒体 1.25/0.833')
+    : bad('亮度对比度补偿', JSON.stringify({ p: bcParent, m: bcMedia }));
+
+  // (l) 色温：暖 = 负角、冷 = 正角，媒体取反
+  var warmCfg = CC.normalize({ theme: { temperature: 100 }, advanced: { preserveMedia: true } });
+  var coolCfg = CC.normalize({ theme: { temperature: -100 }, advanced: { preserveMedia: true } });
+  (/hue-rotate\(-15deg\)/.test(FC.build(warmCfg.theme, warmCfg)) &&
+    /hue-rotate\(15deg\)/.test(FC.buildMedia(warmCfg.theme, warmCfg)) &&
+    /hue-rotate\(15deg\)/.test(FC.build(coolCfg.theme, coolCfg)) &&
+    /hue-rotate\(-15deg\)/.test(FC.buildMedia(coolCfg.theme, coolCfg)))
+    ? ok('色温改可反向算子：暖 -15deg / 冷 +15deg，媒体取反')
+    : bad('色温算子', JSON.stringify({
+        warm: FC.build(warmCfg.theme, warmCfg), warmM: FC.buildMedia(warmCfg.theme, warmCfg)
+      }));
+
+  // (m) 媒体选择器：覆盖位图类元素 + svg:has(image) + 手动标记
+  ['img', 'video', 'canvas', 'svg:has(image)', '[data-nw-preserve]'].every(function (sel) {
+    return FC.MEDIA_SELECTOR.indexOf(sel) >= 0;
+  })
+    ? ok('媒体选择器：img/video/canvas + svg:has(image) + [data-nw-preserve]')
+    : bad('媒体选择器', FC.MEDIA_SELECTOR);
+
+  // (n) 媒体亮度可调：取自 advanced.mediaDim（设置页「高级·媒体亮度」，60–100），
+  //     随配置导出/导入；越界值被 normalize 钳制。
+  var md80 = CC.normalize({ advanced: { preserveMedia: true, mediaDim: 80 } });
+  var mdLow = CC.normalize({ advanced: { preserveMedia: true, mediaDim: 30 } });
+  var md80First = String(FC.buildMedia(md80.theme, md80)).split(' ')[0];
+  var mdLowFirst = String(FC.buildMedia(mdLow.theme, mdLow)).split(' ')[0];
+  (md80First === 'brightness(0.800)' && mdLowFirst === 'brightness(0.600)')
+    ? ok('媒体亮度可调：取自 advanced.mediaDim 且钳制在 60–100')
+    : bad('媒体亮度可调', JSON.stringify({ at80: md80First, at30: mdLowFirst }));
 });
 
 /* [11] content.js 消息通道（tick 优先采用消息配置，缺失才回读 storage）

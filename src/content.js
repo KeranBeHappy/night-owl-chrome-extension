@@ -44,7 +44,7 @@
     if (c.advanced.preserveMedia) {
       css += FILTER.MEDIA_SELECTOR.split(',').map(function (sel) {
         return scope + ' ' + sel.trim();
-      }).join(',\n') + ' { filter: ' + FILTER.buildMedia(c.theme) + ' !important; }\n';
+      }).join(',\n') + ' { filter: ' + FILTER.buildMedia(c.theme, c) + ' !important; }\n';
     }
 
     // 滚动条不参与 filter，单独指定深色（scrollbar-color 对 Chrome 121+ 生效）

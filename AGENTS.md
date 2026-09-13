@@ -143,4 +143,8 @@ popup / options：UI 面板
 
 - 地图 / 在线设计工具 / PDF 查看器等依赖精确颜色的页面效果差 → 用黑名单处理。
 - `position: fixed` 吸顶导航在部分站点异常 → 「高级」里切换滤镜应用范围，或加黑名单。
-- 反色强度 < 100% 时图片轻微发灰（已做对比度补偿）。
+- 图片 / 视频保真：父级滤镜**只允许用可反向算子**（invert / hue-rotate / brightness / contrast / saturate）；
+  `sepia`（色温）与 `grayscale`（灰度）不可反向，用了就会让媒体"怎么补偿都不对"
+  —— 所以色温改用 hue-rotate + saturate、灰度折进 saturate(1-g)，媒体侧做逆运算 +
+  「媒体亮度」压暗（`advanced.mediaDim`，整数百分比 60–100、默认 92，设置页「高级」滑杆可调，
+  仅在 preserveMedia 开启时生效并联动置灰，随配置导出/导入；`check.js` `[10]` 段有断言钉住）。

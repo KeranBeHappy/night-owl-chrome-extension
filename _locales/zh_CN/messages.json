@@ -326,32 +326,60 @@
     "description": "滑块"
   },
   "hintInvert": {
-    "message": "控制颜色反转的强度。数值越低，夜色越柔和、越偏灰。",
+    "message": "夜色的深浅。拉到 100 是纯黑底白字的夜间效果，往下拉夜色更柔和、偏灰白。",
     "description": "说明"
   },
   "lblBrightness": {
     "message": "亮度",
     "description": "滑块"
   },
+  "hintBrightness": {
+    "message": "画面的整体明暗。超过 100 更亮、低于 100 更暗，在夜色基础上再微调明暗。",
+    "description": "说明"
+  },
   "lblContrast": {
     "message": "对比度",
     "description": "滑块"
+  },
+  "hintContrast": {
+    "message": "文字与背景的反差。越高文字越清晰锐利，越低越柔和、层次更平。",
+    "description": "说明"
   },
   "lblSaturation": {
     "message": "饱和度",
     "description": "滑块"
   },
+  "hintSaturation": {
+    "message": "颜色的鲜艳程度。0 是全黑白，100 是原色，超过 100 更艳丽。",
+    "description": "说明"
+  },
   "lblWarmth": {
     "message": "色温",
     "description": "滑块"
+  },
+  "hintWarmth": {
+    "message": "想让画面偏暖黄或冷蓝。注意：它只能让彩色元素轻微偏色，白色文字和灰色背景基本不变，效果较轻微。",
+    "description": "说明"
   },
   "lblGrayscale": {
     "message": "黑白程度",
     "description": "滑块"
   },
+  "hintGrayscale": {
+    "message": "把画面变成黑白。夜间反色后本来就近黑白，此滑杆收益很小；拉到 100 为全黑白。",
+    "description": "说明"
+  },
   "btnResetAppearance": {
     "message": "恢复默认外观",
     "description": "按钮"
+  },
+  "btnMoreOptions": {
+    "message": "更多选项",
+    "description": "按钮：展开更多外观选项"
+  },
+  "btnResetMediaDim": {
+    "message": "恢复默认",
+    "description": "按钮：媒体亮度恢复默认"
   },
   "previewHeading": {
     "message": "标题文字",
@@ -410,7 +438,15 @@
     "description": "选项"
   },
   "hintPreserveMedia": {
-    "message": "图片、视频、画布会被反向还原。若某站点把界面画在 canvas 上，可关闭此项。",
+    "message": "图片、视频、画布等会完整还原成白天原色（只比白天略暗一档），且不受色温、灰度、亮度、对比度影响。若某站点把界面画在 canvas 上，可关闭此项。",
+    "description": "说明"
+  },
+  "lblMediaDim": {
+    "message": "媒体亮度",
+    "description": "选项"
+  },
+  "hintMediaDim": {
+    "message": "黑夜模式下图片、视频等保持白天原色，只整体压暗到这个亮度；100% 与白天完全一致。仅在开启上方「保留图片与视频的原始色彩」时生效，该值会随配置导出 / 导入。",
     "description": "说明"
   },
   "lblSkipDark": {

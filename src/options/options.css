@@ -9,8 +9,33 @@
   --moon: #f5c86a;
   --ok: #4a9d5f;
   --danger: #d4537e;
+  --danger-soft: rgba(212, 83, 126, .14);
+  --danger-fg: #f0a2bd;
+  --warn-fg: #f5c86a;
   --radius: 10px;
 }
+
+/* 亮色（白天）主题：options.js 按"当前实际生效的明暗"给 <html> 挂 .nw-light。
+ * 变量是唯一的换肤入口 —— 新增颜色一律走变量，不要在规则里硬编码。 */
+html.nw-light {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --panel-2: #e4e7ec;
+  --line: #d8dbe1;
+  --text: #1b1d21;
+  --muted: #6b7280;
+  --accent: #6b62d6;
+  --moon: #f0b429;
+  --ok: #2f8a48;
+  --danger: #c3355f;
+  --danger-soft: rgba(195, 53, 95, .10);
+  --danger-fg: #b02a52;
+  --warn-fg: #8a5a12;   /* 浅底上的黄色文字对比不足，压深到琥珀色 */
+}
+/* 白天是太阳：不做月牙缺口（.moon::after 用 --bg 画遮罩，亮色下会变成浅色缺口） */
+html.nw-light .moon::after { display: none; }
+/* 亮色下预览视口用面板色当"框"，白底预览页才不至于糊成一片 */
+html.nw-light .preview-viewport { background: var(--panel-2); }
 
 * { box-sizing: border-box; }
 
@@ -61,15 +86,15 @@ body {
 
 h1 { font-size: 17px; font-weight: 500; margin: 0; }
 
-/* 后台无应答提示条：设置页所有改动都要经过 runtime.onMessage，
- * 这条通道断了必须一眼看得出来，否则页面看起来正常但改什么都不生效。 */
+/* 存储读写失败提示条：设置页的改动全靠 chrome.storage.local 落盘，
+ * 落盘/回读一旦失败必须一眼看得出来，否则页面看起来正常但改什么都不生效。 */
 .bg-error {
   margin: 0 0 14px;
   padding: 10px 12px;
   border-radius: var(--radius);
-  background: rgba(212, 83, 126, .14);
+  background: var(--danger-soft);
   border: 1px solid var(--danger);
-  color: #f0a2bd;
+  color: var(--danger-fg);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -119,7 +144,7 @@ section.active { display: block; }
 
 .label { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
-.hint.warn { color: var(--moon); display: none; }
+.hint.warn { color: var(--warn-fg); display: none; }
 .hint.warn.show { display: block; }
 
 .field { margin-top: 12px; }
@@ -219,6 +244,8 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   width: 19px; height: 19px;
   border-radius: 50%;
   background: #fff;
+  /* 亮色主题下轨道是浅灰，纯白滑块会糊在一起，加一层淡阴影拉开层次 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
   transition: transform .15s;
 }
 .switch input:checked + .track { background: var(--ok); }

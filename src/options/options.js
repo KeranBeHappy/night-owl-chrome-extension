@@ -13,6 +13,39 @@
   var toastTimer = null;
   var previewTimer = null;
 
+  /* ---------- 面板换肤 ----------
+   * 与 popup 同一套语义：设置页跟着"当前实际生效的明暗"走（sun.badgeState）。
+   * 黑夜 → 暗色（CSS 默认），白天 / 总开关关闭 → 亮色（html.nw-light）。
+   * 只切 CSS 变量，不套滤镜、不碰用户的外观参数。 */
+  var THEME_KEY = 'night-owl:theme';   // localStorage：给"首帧上色"当缓存
+  var themeTimer = null;
+
+  /* 首帧先按上次的明暗上色，避免打开设置页时"先暗后亮"闪一下；
+   * 真值等 load() 读完配置由 applyTheme 校准。 */
+  try {
+    if (localStorage.getItem(THEME_KEY) === 'light') {
+      document.documentElement.classList.add('nw-light');
+    }
+  } catch (e) { /* 存储不可用就退化为默认暗色，不影响功能 */ }
+
+  /* 按当前生效的明暗切换配色，并按"下一次自然切换点"排下一次重算。
+   * 设置页会长时间开着，而自动模式的昼夜切换不会产生任何 storage 事件 ——
+   * 不自己定时的话，页面会一直停在打开那一刻的配色。拿不到切换点（总开关
+   * 关闭等）就 60s 兜底查一次。 */
+  function applyTheme() {
+    var light = false;
+    if (config && SUN) light = !SUN.badgeState(config).on;
+    try {
+      document.documentElement.classList.toggle('nw-light', light);
+      localStorage.setItem(THEME_KEY, light ? 'light' : 'dark');
+    } catch (e) { }
+    clearTimeout(themeTimer);
+    var next = null;
+    try { next = config && SUN ? SUN.nextSwitch(config) : null; } catch (e) { }
+    var wait = (next && next.at > Date.now()) ? (next.at - Date.now() + 1000) : 60000;
+    themeTimer = setTimeout(applyTheme, wait);
+  }
+
   function msg(key, subs) {
     try { return chrome.i18n.getMessage(key, subs); } catch (e) { return key; }
   }
@@ -59,30 +92,31 @@
     if (bar) bar.style.display = 'none';
   }
 
-  /* 徽标不依赖后台：扩展页面自己就能写 chrome.action（与 popup/background
-   * 的 updateBadge 语义一致）。本机 runtime.onMessage 不注册，nw:saved
-   * 提示可能到不了后台，落盘成功后自己把徽标改成一致状态最可靠。 */
+  /* 徽标同帧写：与 popup 一样只写全局值，判定与颜色统一来自 sun.badgeState。
+   * 落盘成功后不等后台（本机后台唤醒不可靠），后台稍后收到信号闹钟会再收敛
+   * 一次 —— 同一个值，不冲突。 */
   function syncBadge(c) {
     if (!c || !SUN) return;
     try {
-      var on = !!c.enabled && SUN.shouldBeDark(c);
-      chrome.action.setBadgeText({ text: on ? 'ON' : 'OFF' });
-      chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
-      console.debug('[Night Owl] badge ->', on ? 'ON' : 'OFF', '(options)');
+      var s = SUN.badgeState(c);
+      chrome.action.setBadgeText({ text: s.text });
+      chrome.action.setBadgeBackgroundColor({ color: s.color });
+      console.debug('[Night Owl] badge ->', s.text, '(options)');
     } catch (e) { /* action API 不可用时只能靠后台，静默即可 */ }
   }
 
   function save(quiet) {
     echoGuard++;
     config = CFG.normalize(config);
+    config.savedAt = Date.now();   // 供 SW 端按 savedAt 对账取新（回读可能滞后）
     STORE.write(config).then(function () {
       echoGuard--;
       bgOk();
       if (!quiet) toast(msg('msgSaved'));
       renderComputed();
-      syncBadge(config);   // 落盘成功即同步徽标，不等后台
-      // 尽力通知后台刷新角标；失败无所谓，落盘已经完成
-      STORE.nudge({ type: 'nw:saved', config: config });
+      applyTheme();           // 换肤：mode / 总开关 / 时段设置都可能改变生效明暗
+      syncBadge(config);      // 徽标同帧翻转，不等后台
+      STORE.signal(config);   // 信号闹钟：把新配置带给后台（见 store.signal）
     }).catch(function (e) {
       echoGuard--;
       bgFail(e && e.message);
@@ -207,6 +241,7 @@
     updatePreview();
     renderComputed();
     refreshCity();
+    applyTheme();
   }
 
   function syncOutputs() {
@@ -339,6 +374,7 @@
         return;
       }
       var next = CFG.normalize(parsed);
+      next.savedAt = Date.now();   // 落盘打戳：后台按 savedAt 对账取新
       echoGuard++;
       STORE.write(next).then(function () {
         echoGuard--;
@@ -346,7 +382,8 @@
         config = next;
         render();
         toast(msg('msgImported'));
-        STORE.nudge({ type: 'nw:saved', config: config });
+        syncBadge(config);
+        STORE.signal(config);
       }).catch(function (e) {
         echoGuard--;
         bgFail(e && e.message);
@@ -359,6 +396,7 @@
   function restoreDefaults() {
     if (!window.confirm(msg('msgRestoreConfirm'))) return;
     var next = CFG.normalize(CFG.DEFAULTS);
+    next.savedAt = Date.now();   // 落盘打戳：后台按 savedAt 对账取新
     echoGuard++;
     STORE.write(next).then(function () {
       echoGuard--;
@@ -366,7 +404,8 @@
       config = next;
       render();
       toast(msg('msgSaved'));
-      STORE.nudge({ type: 'nw:saved', config: config });
+      syncBadge(config);
+      STORE.signal(config);
     }).catch(function (e) {
       echoGuard--;
       bgFail(e && e.message);
@@ -620,6 +659,12 @@
 
   var initial = 'general';
   try { initial = localStorage.getItem('night-owl:tab') || 'general'; } catch (e) {}
+  /* popup「了解更多」通过 options.html?tab=other 直达：URL 参数优先于记忆的 tab */
+  try {
+    var qs = new URLSearchParams(location.search);
+    var askTab = qs.get('tab');
+    if (askTab && document.querySelector('button[data-tab="' + askTab + '"]')) initial = askTab;
+  } catch (e) {}
   showTab(initial);
 
   load();

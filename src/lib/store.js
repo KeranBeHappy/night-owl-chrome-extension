@@ -1,26 +1,16 @@
-/* Night Owl - direct storage channel (popup + options page)
+/* Night Owl - popup / options 的通道封装（读 / 写 / 信号 / 订阅）
  *
  * WHY THIS EXISTS
- *   On the user's Chrome 152 build, `chrome.runtime.onMessage` refuses to
- *   register in the service worker. Verified from Chrome's own ledger
- *   (Secure Preferences -> serviceworkerevents): the accumulated set holds
- *   alarms/commands/contextMenus/runtime.onInstalled/runtime.onStartup/
- *   storage.onChanged/tabs.onActivated - and NOT runtime.onMessage.
+ *   本机 Chrome 152 上，后台 SW 的 `chrome.runtime.onMessage` 注册不上
+ *   （Chrome 自己的 serviceworkerevents 账本里没有它），消息石沉大海 ——
+ *   表现是"面板里改完，关掉再打开又变回去了"。
+ *   所以面板不走消息：直接读写 chrome.storage.local。
  *
- *   Every popup control except the per-site button goes through
- *   sendMessage -> onMessage. With onMessage dead, the panel could read
- *   nothing and save nothing: "changes revert when I close the panel".
- *
- *   The fix is not to keep fighting the messaging channel. The panel now
- *   reads and writes chrome.storage.local directly, which is confirmed
- *   working on this machine (storage.onChanged is registered and firing).
- *
- * CHANNEL PRIORITY
- *   1. chrome.storage.local  - always available, this is the source of truth
- *   2. chrome.runtime.sendMessage - best-effort only; used to nudge the
- *      background (badge / alarm rescheduling) and to answer instantly.
- *      A failure here is NOT an error the user needs to see, because the
- *      storage write already succeeded.
+ * CHANNEL PRIORITY（两条腿，各司其职）
+ *   1. chrome.storage.local —— 真相来源，落盘即持久（read / write / subscribe）
+ *   2. chrome.alarms        —— 落盘后给后台发"信号闹钟"（signal）：
+ *      alarms 是本机 SW 唯一可靠的唤醒/回调机制；信号里带着刚落盘的 config，
+ *      后台收到即采信，不回读 storage（回读有"写一拍滞后"）。
  */
 (function () {
   'use strict';
@@ -30,6 +20,10 @@
     : (typeof globalThis !== 'undefined' ? globalThis : window);
 
   var KEY = 'config';
+  /* 信号闹钟的名字前缀与延迟；前缀必须与 background.js 的 ALARM_SIGNAL_PREFIX
+   * 保持一致（check.js 有断言钉住）。 */
+  var SIGNAL_PREFIX = 'nw{';
+  var SIGNAL_DELAY_MS = 300;
 
   function hasStorage() {
     try {
@@ -72,25 +66,28 @@
     });
   }
 
-  /* Best-effort nudge to the background so it can refresh the badge and
-   * reschedule the alarm without waiting for storage.onChanged to wake it.
-   * Never rejects: a dead messaging channel is expected and harmless here. */
-  function nudge(message) {
-    return new Promise(function (resolve) {
-      try {
-        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
-          resolve(false); return;
-        }
-        chrome.runtime.sendMessage(message, function () {
-          // Swallow lastError - the storage write already succeeded, so the
-          // user must not be shown a scary "cannot reach background" banner.
-          void (chrome.runtime && chrome.runtime.lastError);
-          resolve(true);
-        });
-      } catch (e) {
-        resolve(false);
-      }
-    });
+  /* 信号闹钟：唤醒后台的**唯一可靠**通道。
+   *
+   * 为什么不用 runtime.sendMessage：本机 Chrome 上后台的 onMessage 根本注册
+   * 不上（Chrome 自己的 serviceworkerevents 账本里没有它），消息石沉大海。
+   * storage.onChanged 虽然活着，但时灵时不灵、且唤醒有延迟。
+   *
+   * 为什么把整份 config 编码进 alarm name：后台回读 storage 有"写一拍滞后"
+   * （刚写完立刻读会拿到旧值），所以让写入方把新配置随信号一起带走 ——
+   * 后台收到即采信，不回读、无滞后。前缀 'nw{' 与 background.js 的
+   * ALARM_SIGNAL_PREFIX 必须一致（check.js 有断言钉住）。
+   *
+   * 失败静默：落盘已经成功，storage.onChanged 通常还能兜住，不该打扰用户。 */
+  function signal(config) {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.alarms) return false;
+      chrome.alarms.create(SIGNAL_PREFIX + JSON.stringify(config), {
+        when: Date.now() + SIGNAL_DELAY_MS
+      });
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   /* Subscribe to external config changes (other panels, context menu,
@@ -115,7 +112,7 @@
   var api = {
     read: read,
     write: write,
-    nudge: nudge,
+    signal: signal,
     subscribe: subscribe
   };
 

@@ -141,6 +141,22 @@
     return isNight(nowMinutes(date), resolveWindow(config, date));
   }
 
+  /* 徽标颜色：黑夜绿 / 白天灰 */
+  var BADGE_COLOR_ON = '#3B6D11';
+  var BADGE_COLOR_OFF = '#8A8A8A';
+
+  /* 徽标状态的唯一出口：黑夜 ON（绿），白天或总开关关闭 OFF（灰）。
+   * popup / options / background 三处共用，避免"各写一份判定"再次漂移
+   * （历史上三处判定不一致正是"徽标不跟着变"的来源之一）。 */
+  function badgeState(config, date) {
+    var on = !!config && shouldBeDark(config, date);
+    return {
+      on: on,
+      text: on ? 'ON' : 'OFF',
+      color: on ? BADGE_COLOR_ON : BADGE_COLOR_OFF
+    };
+  }
+
   /* 距离下一次自然切换还有多久。手动模式下同样返回这个时间点，
    * 因为手动覆盖到那一刻就到期、让位给自动。
    * enabled=false 时不排程，返回 null。 */
@@ -169,6 +185,7 @@
     sunTimes: sunTimes,
     resolveWindow: resolveWindow,
     shouldBeDark: shouldBeDark,
+    badgeState: badgeState,
     nextSwitch: nextSwitch,
     utcHoursToLocalMinutes: utcHoursToLocalMinutes
   };

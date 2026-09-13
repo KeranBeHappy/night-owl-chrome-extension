@@ -267,8 +267,12 @@ function runBackground(opts) {
   var listeners = {};
   var sent = [];         // 记录 tabs.sendMessage，用于验证"广播是否真的发出去了"
   var menuUpdates = [];  // 记录 contextMenus.update，用于验证菜单项置灰
+  var alarmsCreated = []; // 记录 alarms.create，用于验证触摸闹钟
   var stored = { config: (opts && opts.seedConfig) ? opts.seedConfig : {} };
-  var badge = { text: null };   // 记录 setBadgeText，用于验证徽标语义
+  /* 记录 setBadgeText，用于验证徽标语义：text = 全局徽标，tabTexts = per-tab。
+   * per-tab 应当永远是空的（徽标只写全局值）；背景代码若哪天又去"回读徽标"，
+   * 会因为夹具没提供 getBadgeText 而立刻暴露。 */
+  var badge = { text: null, tabTexts: {} };
   /* breakApi: make one specific addListener throw, to prove that a single
    * failed registration cannot take down the listeners registered after it. */
   var broken = opts && opts.breakApi ? String(opts.breakApi).split('.') : null;
@@ -305,7 +309,11 @@ function runBackground(opts) {
       },
       onChanged: on('storageChanged')
     },
-    alarms: { create: function () {}, clear: function () {}, onAlarm: on('onAlarm') },
+    alarms: {
+      create: function (o) { alarmsCreated.push(o && o.name); },
+      clear: function () {},
+      onAlarm: on('onAlarm')
+    },
     commands: { onCommand: on('onCommand') },
     tabs: {
       query: function (q, cb) { cb([{ id: 1, url: 'https://example.com/' }]); },
@@ -317,7 +325,8 @@ function runBackground(opts) {
         if (typeof cb === 'function') { cb({ dark: true }); return undefined; }
         return Promise.resolve({ dark: true });
       },
-      onActivated: on('onActivated')
+      onActivated: on('onActivated'),
+      onUpdated: on('onUpdated')
     },
     contextMenus: {
       removeAll: function (cb) { if (cb) cb(); },
@@ -327,7 +336,11 @@ function runBackground(opts) {
       onClicked: on('onClicked')
     },
     action: {
-      setBadgeText: function (o) { badge.text = o && o.text; },
+      /* 全局徽标记 badge.text；per-tab 徽标（受限页面黄叹号）记 badge.tabTexts */
+      setBadgeText: function (o) {
+        if (o && o.tabId) badge.tabTexts[o.tabId] = o.text;
+        else badge.text = o && o.text;
+      },
       setBadgeBackgroundColor: function () {}
     },
     scripting: { executeScript: function () { return Promise.resolve(); } },
@@ -337,7 +350,7 @@ function runBackground(opts) {
   if (!isAbsent('contextMenus', 'onShown')) chrome.contextMenus.onShown = on('onShown');
 
   var box = {
-    console: { log: function () {}, warn: function () {}, error: function () {} },
+    console: { log: function () {}, debug: function () {}, warn: function () {}, error: function () {} },
     chrome: chrome,
     Promise: Promise, Date: Date, Math: Math, JSON: JSON,
     Array: Array, Object: Object, String: String,
@@ -373,29 +386,30 @@ function runBackground(opts) {
     return { error: e.message, listeners: listeners };
   }
 
-  var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'onShown', 'onClicked', 'onMessage', 'storageChanged'];
+  /* 期待的监听器。onActivated 是"onShown 缺席时才注册"的条件兜底，默认夹具
+   * 里 onShown 存在，所以它不在这个列表里（另一条断言单独覆盖兜底分支）。 */
+  var want = ['onInstalled', 'onStartup', 'onAlarm', 'onCommand', 'onShown', 'onClicked', 'storageChanged'];
   var missing = want.filter(function (k) { return typeof listeners[k] !== 'function'; });
-  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, menuUpdates: menuUpdates, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
+  return { missing: missing, listeners: listeners, box: box, sent: sent, stored: stored, badge: badge, menuUpdates: menuUpdates, alarmsCreated: alarmsCreated, regFail: box.REG_FAIL, regSkip: box.REG_SKIP };
 }
 
 (function () {
   // (a) native service worker path
   var sw = runBackground({ native: true });
   if (sw.error) { bad('SW 原生路径执行', sw.error); return; }
-  sw.missing.length ? bad('SW 监听器', 'missing ' + sw.missing.join(',')) : ok('SW 原生路径：8 个监听器全部注册');
+  sw.missing.length ? bad('SW 监听器', 'missing ' + sw.missing.join(',')) : ok('SW 原生路径：7 个监听器全部注册');
 
   /* REGRESSION: one throwing registration must not kill the others.
-   * This is the bug that made runtime.onMessage disappear on Chrome 152:
-   * contextMenus.onClicked threw, onMessage was registered last, so the
-   * popup/options had no channel to the background at all. */
+   * 真实事故：contextMenus.onClicked 在 Chrome 152 上抛错，把排在它后面的
+   * 监听器一起拖死，UI 与后台之间彻底失去了通道（"改完关掉面板又变回去"）。 */
   (function () {
     var hostile = runBackground({ native: true, breakApi: 'contextMenus.onClicked' });
     if (hostile.error) { bad('隔离注册（注入故障）', hostile.error); return; }
-    var stillThere = ['onMessage', 'storageChanged', 'onAlarm', 'onCommand']
+    var stillThere = ['storageChanged', 'onAlarm', 'onCommand', 'onInstalled']
       .filter(function (k) { return typeof hostile.listeners[k] === 'function'; });
     stillThere.length === 4
-      ? ok('隔离注册：onClicked 抛错时 onMessage/storage/alarms/commands 仍存活')
-      : bad('隔离注册', '被拖死的监听器: ' + ['onMessage', 'storageChanged', 'onAlarm', 'onCommand']
+      ? ok('隔离注册：onClicked 抛错时 storage/alarms/commands/installed 仍存活')
+      : bad('隔离注册', '被拖死的监听器: ' + ['storageChanged', 'onAlarm', 'onCommand', 'onInstalled']
         .filter(function (k) { return typeof hostile.listeners[k] !== 'function'; }).join(','));
     (hostile.regFail && hostile.regFail.length)
       ? ok('隔离注册：失败被记录 (' + hostile.regFail[0].slice(0, 40) + ')')
@@ -416,10 +430,10 @@ function runBackground(opts) {
     (!noShown.regFail || noShown.regFail.length === 0)
       ? ok('缺失事件：不产生 REG_FAIL（不再误报为致命错误）')
       : bad('缺失事件', '被误判为致命: ' + noShown.regFail.join(','));
-    // 命脉仍然全部就位
-    ['onMessage', 'storageChanged', 'onAlarm', 'onCommand', 'onClicked']
+    // 命脉仍然全部就位（含兜底启用的 tabs.onActivated）
+    ['storageChanged', 'onAlarm', 'onCommand', 'onClicked', 'onInstalled', 'onStartup', 'onActivated']
       .every(function (k) { return typeof noShown.listeners[k] === 'function'; })
-      ? ok('缺失事件：onShown 不在时其余 8 项照常注册')
+      ? ok('缺失事件：onShown 不在时其余 7 项照常注册')
       : bad('缺失事件', '有监听器被连带拖死');
     // 兜底路径接管：onShown 缺席时应改用 tabs.onActivated
     (typeof noShown.listeners.onActivated === 'function')
@@ -430,7 +444,7 @@ function runBackground(opts) {
   // (b) importScripts 失败后的回退路径（就是农场主屏幕上那个 status code 15）
   var ep = runBackground({ native: false });
   if (ep.error) { bad('回退路径执行', ep.error); return; }
-  ep.missing.length ? bad('回退路径监听器', 'missing ' + ep.missing.join(',')) : ok('回退路径：8 个监听器全部注册');
+  ep.missing.length ? bad('回退路径监听器', 'missing ' + ep.missing.join(',')) : ok('回退路径：7 个监听器全部注册');
   var em = ep.box.NW && ep.box.NW.matcher;
   (em && typeof em.toggleSiteDark === 'function')
     ? ok('回退路径：NW.matcher 可用（require 分支）')
@@ -439,70 +453,25 @@ function runBackground(opts) {
   /* The resolver must map every logical event name onto the right object, and
    * must come back empty (not throw, not mis-map) when one is absent. */
   (function () {
-    var names = ['onMessage', 'storageChanged', 'onAlarm', 'onCommand',
+    var names = ['storageChanged', 'onAlarm', 'onCommand',
                  'onInstalled', 'onStartup', 'onShown', 'onClicked'];
     var full = sw.listeners;
     var allOk = names.every(function (k) { return typeof full[k] === 'function'; });
-    allOk ? ok('解析器：8 个事件全部命中原对象')
+    allOk ? ok('解析器：7 个事件全部命中原对象')
           : bad('解析器', '未命中: ' + names.filter(function (k) { return typeof full[k] !== 'function'; }).join(','));
 
     // 缺 onShown 时不能错配到别的对象上
     var deg = runBackground({ native: true, noApi: 'contextMenus.onShown' });
     (typeof deg.listeners.onShown !== 'function'
       && typeof deg.listeners.onClicked === 'function'
-      && typeof deg.listeners.onMessage === 'function')
+      && typeof deg.listeners.onInstalled === 'function')
       ? ok('解析器：onShown 缺失时无错配，其余照常')
       : bad('解析器', 'onShown 缺失导致了错配');
   })();
 
-  // onMessage 路由不能因垃圾消息抛错，异步应答必须返回 true
-  try {
-    var L = sw.listeners;
-    L.onMessage(null, {}, function () {});
-    L.onMessage({ type: 'unknown' }, {}, function () {});
-    L.onMessage({ type: 'nw:read' }, {}, function () {}) === true
-      ? ok('nw:read 异步应答（返回 true）')
-      : bad('nw:read', '应返回 true');
-  } catch (e) {
-    bad('onMessage 路由', e.message);
-  }
-
-  /* nw:ping - popup uses it on open to detect a dead background immediately
-   * instead of silently showing a panel where nothing works. */
-  (function () {
-    var p = runBackground({ native: true });
-    var got = null;
-    p.listeners.onMessage({ type: 'nw:ping' }, {}, function (r) { got = r; });
-    (got && got.ok === true)
-      ? ok('nw:ping 同步应答')
-      : bad('nw:ping', JSON.stringify(got));
-  })();
-
-  /* END-TO-END: drag a popup slider, close, reopen - the value must stick.
-   * This is the exact report: "options revert after I close the panel". */
-  (function () {
-    var p = runBackground({ native: true });
-    var saved = null;
-    // popup 'change' -> save() -> nw:save
-    var cfg = JSON.parse(JSON.stringify(require(path.join(ROOT, 'src/lib/config.js')).DEFAULTS));
-    cfg.theme.brightness = 62;
-    cfg.theme.temperature = -40;
-    p.listeners.onMessage({ type: 'nw:save', config: cfg }, {}, function (r) { saved = r; });
-    flush(function () {
-      var b = p.stored.config && p.stored.config.theme && p.stored.config.theme.brightness;
-      var t = p.stored.config && p.stored.config.theme && p.stored.config.theme.temperature;
-      (b === 62) ? ok('滑块落盘：brightness=62 持久化') : bad('滑块落盘 brightness', String(b));
-      (t === -40) ? ok('滑块落盘：temperature=-40 持久化') : bad('滑块落盘 temperature', String(t));
-      // reopen: nw:read must return the stored values
-      var read = null;
-      p.listeners.onMessage({ type: 'nw:read' }, {}, function (r) { read = r; });
-      flush(function () {
-        (read && read.ok && read.config.theme.brightness === 62)
-          ? ok('重开面板：nw:read 返回 62（不回弹）')
-          : bad('重开面板回读', JSON.stringify(read && read.config && read.config.theme));
-      });
-    });
-  })();
+  /* 注：原先这里还有 nw:ping / nw:save / nw:read 的消息路由测试。
+   * 消息通道（runtime.onMessage）已整体删除 —— 本机注册不上、UI 也不再依赖，
+   * 滑块落盘/回读由 [9] 段的 storage 直连断言覆盖。 */
 
   /* 徽标语义：黑夜 ON，白天 OFF（不再白天留空） */
   (function () {
@@ -551,13 +520,15 @@ console.log('[8] broadcast（异步断言）');
  * 导致"手动切黑夜不生效""右键加白名单不同步"。
  * 这几组断言涉及 Promise 链，结果由 flush 延后输出 —— 排在最后。 */
 (function () {
-  // nw:save（popup 切模式 / 设置页保存）必须广播
+  // UI 落盘（popup 切模式 / 设置页保存都直写 storage）-> storage.onChanged 必须广播
   var r1 = runBackground({ native: true });
-  r1.listeners.onMessage({ type: 'nw:save', config: { mode: 'dark' } }, {}, function () {});
+  r1.listeners.storageChanged({
+    config: { newValue: C.normalize({ mode: 'dark' }), oldValue: null }
+  }, 'local');
   flush(function () {
     r1.sent.indexOf('nw:tick') >= 0
-      ? ok('nw:save -> 广播 nw:tick（手动切模式即时生效）')
-      : bad('nw:save 广播', '未发送 nw:tick');
+      ? ok('UI 落盘 -> storage.onChanged 广播 nw:tick（手动切模式即时生效）')
+      : bad('storage 广播', '未发送 nw:tick');
   });
 
   // 右键菜单点击必须广播，且白名单要落盘
@@ -573,15 +544,18 @@ console.log('[8] broadcast（异步断言）');
       : bad('右键菜单落盘', JSON.stringify(wl));
   });
 
-  // nw:site-toggle（popup 站点开关）必须广播
+  // 信号闹钟（UI 站点开关/保存后走的通道）必须广播 + 收敛徽标
   var r3 = runBackground({ native: true });
-  r3.listeners.onMessage({ type: 'nw:site-toggle', url: 'https://example.com/', currentDark: false }, {}, function () {});
+  var siteCfg = C.normalize({ mode: 'dark', lists: { blacklist: ['example.com'] } });
+  siteCfg.savedAt = Date.now();
+  r3.listeners.onAlarm({ name: 'nw{' + JSON.stringify(siteCfg) });
   flush(function () {
     r3.sent.indexOf('nw:tick') >= 0
-      ? ok('nw:site-toggle -> 广播 nw:tick')
-      : bad('nw:site-toggle 广播', '未发送 nw:tick');
-    var bl = r3.stored.config && r3.stored.config.lists && r3.stored.config.lists.blacklist;
-    (bl && bl.length === 1) ? ok('nw:site-toggle -> 黑名单已落盘') : bad('nw:site-toggle 落盘', JSON.stringify(bl));
+      ? ok('信号闹钟 -> 广播 nw:tick')
+      : bad('信号广播', '未发送 nw:tick');
+    (r3.badge.text === 'ON')
+      ? ok('信号闹钟 -> 全局徽标收敛为 ON')
+      : bad('信号徽标', String(r3.badge.text));
   });
 
   // 快捷键切昼夜必须广播
@@ -622,29 +596,182 @@ console.log('[8] broadcast（异步断言）');
       ? ok('总开关关闭：右键白名单不生效，菜单项置灰 (enabled=false)')
       : bad('右键关态', JSON.stringify({ wl: wl, updates: r6.menuUpdates }));
   });
+
+  /* 回归：徽标只有一个全局值 —— 任何路径都不得写 per-tab。
+   * per-tab 覆盖一旦写入就与全局断开、且 Chrome 没有"解除覆盖"的 API，于是
+   * 必然引出"回读当前全局值 → 再写回每个 tab"的一整条维护链（历史上就是它
+   * 制造了"ON/OFF 不主动显示、点开 popup 才出现、被写空后再也回不来"）。
+   * 现在整套删除，这里用夹具的 tabTexts 钉死：它必须永远是空的。 */
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      var tabWrites = Object.keys(bg.badge.tabTexts).length;
+      (bg.badge.text === 'ON' && tabWrites === 0)
+        ? ok('徽标：只写全局值，无任何 per-tab 写入')
+        : bad('徽标写了 per-tab', JSON.stringify({ global: bg.badge.text, tabTexts: bg.badge.tabTexts }));
+    });
+  })();
+
+  // 回归：停在受限页面（chrome:// 等）时徽标仍表达全局昼夜，不打黄叹号；
+  // 标签页激活/导航也不再参与徽标计算（那套监听器已整体删除）。
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    var sentBefore = bg.sent.length;
+    bg.box.chrome.tabs.query = function (q, cb) { cb([{ id: 1, url: 'chrome://extensions/' }]); };
+    bg.box.chrome.tabs.get = function (id, cb) { cb({ id: id, url: 'chrome://extensions/' }); };
+    flush(function () {
+      var cfg = bg.stored.config;
+      (bg.badge.text === 'ON' && Object.keys(bg.badge.tabTexts).length === 0 &&
+        bg.sent.length === sentBefore && cfg && cfg.mode === 'dark')
+        ? ok('受限页：徽标仍是全局 ON、零 per-tab、黑白状态不受影响')
+        : bad('受限页徽标', JSON.stringify({ g: bg.badge.text, tabs: bg.badge.tabTexts, sent: bg.sent.length }));
+    });
+  })();
+
+  // 回归：昼夜切换（storage.onChanged 主通道）只重写全局徽标
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      bg.listeners.storageChanged({
+        config: { newValue: C.normalize({ mode: 'light' }), oldValue: null }
+      }, 'local');
+      flush(function () {
+        (bg.badge.text === 'OFF' && Object.keys(bg.badge.tabTexts).length === 0)
+          ? ok('昼夜切换：全局徽标翻转为 OFF')
+          : bad('昼夜切换徽标', JSON.stringify({ g: bg.badge.text, tabs: bg.badge.tabTexts }));
+      });
+    });
+  })();
+
+  // 回归：SW 冷启动（扩展管理页"重新加载"、没有任何 tabs 事件）也要写对全局
+  // 徽标 —— 这是"扩展重载后角标空白"的守卫。
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      (bg.badge.text === 'ON')
+        ? ok('冷启动：全局徽标写为 ON')
+        : bad('冷启动徽标', String(bg.badge.text));
+    });
+  })();
+
+  // sun.badgeState —— 徽标文本与颜色的唯一出口（三个写入方共用）
+  (function () {
+    var dark = S.badgeState(C.normalize({ mode: 'dark' }));
+    var light = S.badgeState(C.normalize({ mode: 'light' }));
+    var off = S.badgeState(C.normalize({ enabled: false }));
+    (dark.text === 'ON' && dark.color === '#3B6D11' &&
+      light.text === 'OFF' && light.color === '#8A8A8A' && off.text === 'OFF')
+      ? ok('sun.badgeState：黑夜 ON(绿) / 白天 OFF(灰) / 总开关关闭 OFF')
+      : bad('sun.badgeState', JSON.stringify({ dark: dark, light: light, off: off }));
+  })();
+
+  // 回归：savedAt 时间戳对账 —— loadConfig 回读命中滞后旧快照（savedAt 比内存
+  // 小）时，保留内存中的较新状态（供启动/alarm/自愈等仍需读 storage 的路径使用）。
+  (function () {
+    var seed = C.normalize({ mode: 'dark' });
+    seed.savedAt = Date.now() + 10000;   // 内存/落盘均为"较新"的时间戳
+    var bg = runBackground({ native: true, seedConfig: seed });
+    flush(function () {
+      /* 模拟滞后：回读返回 savedAt 更小的旧白天快照 */
+      bg.box.chrome.storage.local.get = function (k, cb) {
+        var stale = C.normalize({ mode: 'light' });
+        stale.savedAt = Date.now() - 10000;
+        cb({ config: stale });
+      };
+      bg.listeners.onAlarm({ name: 'nw-switch' });   // 昼夜切换闹钟走 loadConfig 路径
+      flush(function () {
+        (bg.badge.text === 'ON' && bg.stored.config.mode === 'dark')
+          ? ok('savedAt 对账：滞后旧快照不覆盖内存较新状态')
+          : bad('savedAt 对账失败', JSON.stringify({ g: bg.badge.text, m: bg.stored.config && bg.stored.config.mode }));
+      });
+    });
+  })();
+
+  // 回归：normalize 保留 savedAt 字段（unknown key 会被丢弃，savedAt 必须幸存）
+  (function () {
+    var c = C.normalize({ savedAt: 12345 });
+    (c.savedAt === 12345)
+      ? ok('normalize 保留 savedAt 时间戳')
+      : bad('normalize 丢 savedAt', String(c.savedAt));
+  })();
+
+  // 回归：nw 信号闹钟（config 编码进 name）—— UI 落盘后的可靠同步通道
+  // （onMessage 不注册、onChanged 不可靠、回读 storage 滞后），SW 收到后
+  // 直接采信信号里的 config，全量收敛：徽标 + 活动 tab per-tab + 广播。
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      var lightCfg = C.normalize({ mode: 'light' });
+      lightCfg.savedAt = Date.now();   // popup 落盘时打的戳
+      bg.listeners.onAlarm({ name: 'nw{' + JSON.stringify(lightCfg) });
+      flush(function () {
+        var broadcasted = bg.sent.indexOf('nw:tick') >= 0;
+        var noTabWrites = Object.keys(bg.badge.tabTexts).length === 0;
+        (bg.badge.text === 'OFF' && broadcasted && noTabWrites)
+          ? ok('nw 信号：采信信号 config，徽标收敛 OFF + 广播（零 per-tab）')
+          : bad('nw 信号未收敛', JSON.stringify({ g: bg.badge.text, tabs: bg.badge.tabTexts, sent: bg.sent }));
+      });
+    });
+  })();
+
+  // 回归：乱序保护 —— 迟到的旧信号（savedAt 更小）不得覆盖新状态
+  (function () {
+    var bg = runBackground({ native: true, seedConfig: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      var newer = C.normalize({ mode: 'light' });
+      newer.savedAt = Date.now();
+      var older = C.normalize({ mode: 'dark' });
+      older.savedAt = Date.now() - 10000;
+      bg.listeners.onAlarm({ name: 'nw{' + JSON.stringify(newer) });
+      bg.listeners.onAlarm({ name: 'nw{' + JSON.stringify(older) });
+      flush(function () {
+        (bg.badge.text === 'OFF')
+          ? ok('乱序保护：迟到的旧信号被丢弃，徽标保持新状态 (OFF)')
+          : bad('乱序信号覆盖新状态', String(bg.badge.text));
+      });
+    });
+  })();
+
+  // 回归：过期手动模式被 normalize 自愈时必须落盘并广播。
+  // 真实场景：闹钟缺席（SW 休眠）跨过失效点，自愈只改内存的话徽标按白天算 OFF，
+  // 而所有页面还停留在最后一次广播的黑夜 —— 状态分裂"页面黑夜 + 徽标全 OFF"。
+  (function () {
+    var raw = C.normalize({ mode: 'dark' });
+    raw.manualUntil = Date.now() - 1000;   // 已过期（不经 normalize，模拟 storage 原值）
+    var bg = runBackground({ native: true, seedConfig: raw });
+    flush(function () {
+      var cfg = bg.stored.config;
+      var broadcast = bg.sent.indexOf('nw:tick') >= 0;
+      /* 自愈后是 auto 模式，徽标应与 auto 的实时判定一致（白天 OFF / 黑夜 ON） */
+      var expect = S.shouldBeDark(C.normalize({ mode: 'auto' })) ? 'ON' : 'OFF';
+      (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0 && bg.badge.text === expect && broadcast)
+        ? ok('过期手动自愈：落盘回 auto + 徽标同步 (' + expect + ') + 广播收敛页面')
+        : bad('过期自愈未收敛', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil, b: bg.badge.text, expect: expect, sent: bg.sent }));
+    });
+  })();
 })();
 
-/* [9] storage 直写通道（onMessage 缺席时的主通道）
+/* [9] storage 直写通道（UI 与后台之间唯一的"变更"通道）
  *
- * 本轮核心回归。
+ * 现场证据（Chrome Secure Preferences -> serviceworkerevents）：本机 Chrome 152
+ * 上后台成功注册的监听器里**没有** runtime.onMessage —— popup 里所有走
+ * sendMessage 的操作全部石沉大海，症状就是"改完关掉面板又变回去"。
+ * 所以 popup/options 只做两件事：直写 chrome.storage.local + 发信号闹钟；
+ * runtime.onMessage 那套分支已彻底删除（在本机是死代码）。
  *
- * 现场证据（Chrome Secure Preferences -> serviceworkerevents）：
- *   成功注册的是 alarms/commands/contextMenus/runtime.onInstalled/
- *   runtime.onStartup/storage.onChanged/tabs.onActivated —— 7 个，
- *   唯独没有 runtime.onMessage。
- * 于是 popup 里所有走 sendMessage 的操作全部石沉大海，
- * 症状就是"改完关掉面板又变回去"。
- *
- * 修复后 popup/options 直接读写 chrome.storage.local。
  * 下面用最小 DOM 夹具把 popup.js 真跑一遍，验证：
  *   a) store.js 读写正常
- *   b) onMessage 完全不可用时，popup 依然能读到配置
- *   c) onMessage 完全不可用时，popup 改亮度依然能落盘
- *   d) popup 站点开关依然能落盘
- *   e) 后台在 onMessage 缺席时，靠 storage.onChanged 完成广播
+ *   b) popup 能读到配置（不依赖任何消息通道）
+ *   c) popup 改亮度能落盘
+ *   d) popup 站点开关能落盘
+ *   e) 后台靠 storage.onChanged 完成广播
+ *   f) 徽标同帧翻转（UI 自己写全局徽标）
+ *   g) 后台 storage.onChanged 路径刷徽标
+ *   h) 信号闹钟两端一致（store.signal 的 name 能被 background 解析）
+ *   i) 总开关门控 / j) 受限页门控 / k) 落盘后发信号闹钟
  */
 afterSections(function () {
-  console.log('[9] storage 直写通道（onMessage 缺席时的主通道）');
+  console.log('[9] storage 直写通道（UI 变更的唯一入口）');
   /* ---- 最小 DOM 夹具：只实现 popup.js 真正用到的部分 ---- */
   function makePopupDom() {
     var nodes = {};
@@ -672,7 +799,7 @@ afterSections(function () {
       };
     }
     ['status', 'brightness', 'brightnessOut', 'temperature',
-     'temperatureOut', 'siteName', 'openOptions'].forEach(function (id) {
+     'temperatureOut', 'siteName', 'openOptions', 'unsupportedBlock', 'learnMore'].forEach(function (id) {
       nodes[id] = el('div');
       nodes[id].id = id;
     });
@@ -698,7 +825,10 @@ afterSections(function () {
         return [];
       },
       createElement: el,
-      body: el('body')
+      body: el('body'),
+      /* 面板换肤把 .nw-light 挂在 <html> 上（见 popup.js applyTheme），
+       * 夹具必须有 documentElement，否则 [9] 段直接崩。 */
+      documentElement: el('html')
     };
     return { doc: doc, nodes: nodes, modeBtns: modeBtns, siteBtns: siteBtns, siteRow: siteRow };
   }
@@ -733,34 +863,42 @@ afterSections(function () {
     if (opts.seed) st.data.config = opts.seed;
 
     var sendCalls = [];
-    var badge = { text: null, color: null };
+    var badge = { text: null, color: null, tabTexts: {} };
+    var alarmsCreated = [];   // 记录 alarms.create（nw{...} 信号闹钟）
+    /* localStorage 桩：面板换肤的"首帧上色"缓存（html.nw-light 防闪的依据） */
+    var ls = {
+      data: {},
+      getItem: function (k) {
+        return Object.prototype.hasOwnProperty.call(this.data, k) ? this.data[k] : null;
+      },
+      setItem: function (k, v) { this.data[k] = String(v); }
+    };
     var chrome = {
       runtime: {
         id: 'test',
         lastError: null,
         openOptionsPage: function () {},
-        /* messagingAvailable=false 就是农场主机器上的真实情况 */
-        sendMessage: function (m, cb) {
-          sendCalls.push(m && m.type);
-          if (opts.messagingAvailable === false) {
-            chrome.runtime.lastError = { message: 'Could not establish connection. Receiving end does not exist.' };
-            if (cb) cb(undefined);
-            chrome.runtime.lastError = null;
-            return;
-          }
-          if (cb) cb({ ok: true });
-        }
+        getURL: function (p) { return 'chrome-extension://test/' + p; }
       },
       action: {
-        setBadgeText: function (o) { badge.text = o && o.text; },
+        /* 全局徽标记 badge.text；tabTexts 记 per-tab —— 面板不该往里写任何东西 */
+        setBadgeText: function (o) {
+          if (o && o.tabId) badge.tabTexts[o.tabId] = o.text;
+          else badge.text = o && o.text;
+        },
         setBadgeBackgroundColor: function (o) { badge.color = o && o.color; }
+      },
+      alarms: {
+        create: function (name) { alarmsCreated.push(name); }
       },
       storage: {
         local: st.local,
         onChanged: { addListener: function (fn) { st.subs.push(fn); }, removeListener: function () {} }
       },
       tabs: {
-        query: function (q, cb) { cb([{ id: 1, url: 'https://example.com/page' }]); },
+        /* opts.url：模拟受限页面（chrome:// 等）下打开面板 */
+        query: function (q, cb) { cb([{ id: 1, url: (opts && opts.url) || 'https://example.com/page' }]); },
+        create: function (o) { sendCalls.push('tabs.create:' + (o && o.url)); },
         sendMessage: function () { return Promise.resolve(); }
       },
       i18n: { getMessage: function (k) { return k; }, getUILanguage: function () { return 'zh-CN'; } }
@@ -771,7 +909,7 @@ afterSections(function () {
       Array: Array, Object: Object, String: String, Number: Number,
       isFinite: isFinite, parseInt: parseInt, parseFloat: parseFloat,
       setTimeout: setTimeout, clearTimeout: clearTimeout,
-      URL: URL, chrome: chrome, document: fix.doc,
+      URL: URL, chrome: chrome, document: fix.doc, localStorage: ls,
       addEventListener: function () {}, removeEventListener: function () {}
     };
     box.window = box;
@@ -783,7 +921,10 @@ afterSections(function () {
     });
     new vm.Script(read('src/popup/popup.js'), { filename: 'popup.js' }).runInContext(box);
 
-    return { box: box, fix: fix, st: st, sendCalls: sendCalls, chrome: chrome, badge: badge };
+    return {
+      box: box, fix: fix, st: st, sendCalls: sendCalls, chrome: chrome,
+      badge: badge, alarmsCreated: alarmsCreated, ls: ls
+    };
   }
 
   // (a) store.js 基本读写
@@ -815,19 +956,19 @@ afterSections(function () {
     }).catch(function (e) { bad('store', e.message); });
   })();
 
-  // (b)(c)(d) onMessage 不可用时 popup 的读 / 写 / 站点开关
+  // (b)(c)(d) 无消息通道时 popup 的读 / 写 / 站点开关（全靠 storage 直连）
   (function () {
     var seed = require(path.join(ROOT, 'src/lib/config.js'))
       .normalize({ mode: 'dark', theme: { brightness: 77, temperature: -25 } });
-    var p = runPopup({ seed: seed, messagingAvailable: false });
+    var p = runPopup({ seed: seed });
 
     flush(function () {
       var b = p.fix.nodes.brightness.value;
       var t = p.fix.nodes.temperature.value;
-      (b === 77) ? ok('onMessage 死：popup 仍读到 brightness=77') : bad('popup 读 brightness', String(b));
-      (t === -25) ? ok('onMessage 死：popup 仍读到 temperature=-25') : bad('popup 读 temperature', String(t));
+      (b === 77) ? ok('无消息通道：popup 读到 brightness=77') : bad('popup 读 brightness', String(b));
+      (t === -25) ? ok('无消息通道：popup 读到 temperature=-25') : bad('popup 读 temperature', String(t));
       (p.fix.nodes.status.textContent !== 'msgNoBackground')
-        ? ok('onMessage 死：不误报"连不上后台"')
+        ? ok('无消息通道：不误报"连不上后台"')
         : bad('popup 误报', '状态行显示通信失败，但 storage 是通的');
 
       // 拖动亮度并松手 -> 必须落盘
@@ -837,9 +978,9 @@ afterSections(function () {
 
       flush(function () {
         var saved = p.st.data.config && p.st.data.config.theme && p.st.data.config.theme.brightness;
-        (saved === 62) ? ok('onMessage 死：亮度改动已落盘 (=62)') : bad('亮度落盘', String(saved));
+        (saved === 62) ? ok('无消息通道：亮度改动已落盘 (=62)') : bad('亮度落盘', String(saved));
         (p.fix.nodes.status.textContent !== 'msgNoBackground')
-          ? ok('onMessage 死：落盘成功且无错误提示')
+          ? ok('无消息通道：落盘成功且无错误提示')
           : bad('落盘后误报', '状态行报错');
 
         p.fix.siteBtns[1].click();   // 强制夜间 -> 黑名单
@@ -847,7 +988,7 @@ afterSections(function () {
           var lists = p.st.data.config && p.st.data.config.lists;
           var total = lists ? lists.blacklist.length + lists.whitelist.length : 0;
           (total === 1 && lists.blacklist.length === 1)
-            ? ok('onMessage 死：站点三态已落盘（黑名单 1 条）')
+            ? ok('无消息通道：站点三态已落盘（黑名单 1 条）')
             : bad('站点三态落盘', JSON.stringify(lists));
         });
       });
@@ -869,7 +1010,7 @@ afterSections(function () {
   // (f) popup 点击模式 -> 徽标同帧翻转（不等落盘，更不等后台）
   (function () {
     var CC = require(path.join(ROOT, 'src/lib/config.js'));
-    var p = runPopup({ seed: CC.normalize({ mode: 'dark' }), messagingAvailable: false });
+    var p = runPopup({ seed: CC.normalize({ mode: 'dark' }) });
     flush(function () {
       (p.badge.text === 'ON')
         ? ok('popup 打开面板即校准徽标：黑夜 -> ON')
@@ -907,43 +1048,59 @@ afterSections(function () {
     });
   })();
 
-  // (h) nw:saved 必须采用消息自带的配置，不能重读 storage
-  // （真机实证：本机 Chrome 其它上下文刚 set 完，SW 侧立刻 get 拿到的是
-  //   "上一次"的旧值 —— 点白天后事件里是 light，紧随的 get 却是 dark，
-  //   旧实现 loadConfig() 重读就把徽标写回 ON。这里用恒返回 dark 的
-  //   get 夹具复刻该怪癖。）
+  // (h) 信号闹钟两端一致：store.signal 生成的 name 必须能被 background 解析，
+  // 且后台直接采信信号里的 config、绝不回读 storage
+  // （真机实证：本机其它上下文刚 set 完，SW 侧立刻 get 拿到的是"上一次"的旧值）。
   (function () {
     var CC = require(path.join(ROOT, 'src/lib/config.js'));
+
+    /* 用 store.js 自己生成信号，保证前缀/编码方式与 UI 侧一字不差 */
+    var sigName = null;
+    var sbox = {
+      console: console, Promise: Promise, Date: Date, JSON: JSON, Object: Object,
+      chrome: { alarms: { create: function (n) { sigName = n; } } }
+    };
+    sbox.window = sbox; sbox.globalThis = sbox;
+    vm.createContext(sbox);
+    new vm.Script(read('src/lib/store.js'), { filename: 'store.js' }).runInContext(sbox);
+    var light = CC.normalize({ mode: 'light' });
+    light.savedAt = Date.now();
+    sbox.NW.store.signal(light);
+
+    (sigName && sigName.indexOf('nw{') === 0)
+      ? ok('store.signal：信号闹钟 name 以 nw{ 开头')
+      : bad('store.signal', String(sigName));
+
     var bg = runBackground({ native: true, seedConfig: CC.normalize({ mode: 'dark' }) });
     var stale = false;
     flush(function () {
-      // 先让后台启动链落定，再模拟"刚写完 light 立刻通知后台"
       (bg.badge.text === 'ON')
-        ? ok('后台启动：黑夜徽标 ON（nw:saved 前置）')
+        ? ok('后台启动：黑夜徽标 ON（信号前置）')
         : bad('后台徽标 ON', String(bg.badge.text));
 
+      /* 恒返回旧值的 get：后台若错误地回读 storage，徽标就会停在 ON */
       bg.box.chrome.storage.local.get = function (k, cb) {
         stale = true; cb({ config: CC.normalize({ mode: 'dark' }) });
       };
-      bg.listeners.onMessage({ type: 'nw:saved', config: CC.normalize({ mode: 'light' }) }, {}, function () {});
+      bg.listeners.onAlarm({ name: sigName });
       (bg.badge.text === 'OFF')
-        ? ok('nw:saved 采用消息配置：徽标同帧 OFF')
-        : bad('nw:saved 徽标', String(bg.badge.text));
+        ? ok('信号闹钟：后台采信信号里的 config，徽标同帧 OFF')
+        : bad('信号未收敛', String(bg.badge.text));
 
       flush(function () {
-        (bg.badge.text === 'OFF')
-          ? ok('nw:saved 徽标不被后续异步链改写')
-          : bad('nw:saved 徽标被改写', String(bg.badge.text));
         (!stale)
-          ? ok('nw:saved 未触发 storage 重读（消息配置直达）')
-          : bad('nw:saved 重读', '本机 get 有写一拍滞后，禁止回读');
+          ? ok('信号闹钟：未回读 storage（绕开写一拍滞后）')
+          : bad('信号回读了 storage', '本机 get 有写一拍滞后，禁止回读');
+        (bg.badge.text === 'OFF')
+          ? ok('信号闹钟：徽标不被后续异步链改写')
+          : bad('信号徽标被改写', String(bg.badge.text));
       });
     });
   })();
 
   // (i) 总开关是最顶层条件：关闭时 popup 的昼夜模式与站点三态都不生效
   (function () {
-    var p = runPopup({ seed: C.normalize({ enabled: false }), messagingAvailable: false });
+    var p = runPopup({ seed: C.normalize({ enabled: false }) });
     flush(function () {
       p.fix.modeBtns[1].click();   // 黑夜 —— 应被忽略
       p.fix.siteBtns[1].click();   // 强制夜间 —— 应被忽略
@@ -954,6 +1111,61 @@ afterSections(function () {
           ? ok('总开关关闭：popup 昼夜与站点开关均不生效')
           : bad('popup 关态未门控', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil, l: cfg && cfg.lists }));
       });
+    });
+  })();
+
+  // (j) 受限页面（chrome:// 等）：控件禁用；徽标仍只写全局值（无 per-tab 写入）
+  (function () {
+    var p = runPopup({ seed: C.normalize({ enabled: true }), url: 'chrome://settings/' });
+    flush(function () {
+      (Object.keys(p.badge.tabTexts).length === 0)
+        ? ok('受限页：popup 不写任何 per-tab 徽标')
+        : bad('popup 写了 per-tab', JSON.stringify(p.badge.tabTexts));
+      p.fix.modeBtns[1].click();   // 黑夜 —— 应被忽略
+      flush(function () {
+        var cfg = p.st.data.config;
+        (cfg && cfg.mode === 'auto' && cfg.manualUntil === 0)
+          ? ok('受限页面：popup 昼夜模式不生效')
+          : bad('popup 受限页未门控', JSON.stringify({ m: cfg && cfg.mode, u: cfg && cfg.manualUntil }));
+      });
+    });
+  })();
+
+  // (k) 回归：popup 落盘后必须发 nw 信号闹钟，且 name 里携带白天 config
+  (function () {
+    var p = runPopup({ seed: C.normalize({ mode: 'dark' }) });
+    flush(function () {
+      p.fix.modeBtns[2].click();   // 点白天 → save()
+      flush(function () {
+        var sig = p.alarmsCreated.filter(function (n) {
+          return n && n.indexOf('nw{') === 0 && n.indexOf('"mode":"light"') >= 0;
+        })[0];
+        sig
+          ? ok('popup 落盘后发 nw 信号闹钟（name 携带白天 config）')
+          : bad('popup 未发信号闹钟', JSON.stringify(p.alarmsCreated).slice(0, 120));
+      });
+    });
+  })();
+
+  // (l) 面板换肤：popup 跟随"当前实际生效的明暗"（sun.badgeState）——
+  // 黑夜 → 暗色（不加 nw-light），白天 / 总开关关闭 → 亮色（加 nw-light），
+  // 并把结果写进 localStorage 供下次首帧上色（防"先暗后亮"闪一下）。
+  (function () {
+    var dark = runPopup({ seed: C.normalize({ mode: 'dark' }) });
+    var light = runPopup({ seed: C.normalize({ mode: 'light' }) });
+    var off = runPopup({ seed: C.normalize({ enabled: false }) });
+    var auto = runPopup({ seed: C.normalize({ mode: 'auto' }) });
+    /* auto 的期望值必须实时算：跑测试的时刻可能本来就是黑夜 */
+    var autoLight = !S.shouldBeDark(C.normalize({ mode: 'auto' }));
+    flush(function () {
+      function lightOf(p) { return p.fix.doc.documentElement.classList.contains('nw-light'); }
+      var got = { dark: lightOf(dark), light: lightOf(light), off: lightOf(off), auto: lightOf(auto) };
+      (!got.dark && got.light && got.off && got.auto === autoLight)
+        ? ok('面板换肤：黑夜暗色 / 白天亮色 / 关总开关亮色（跟随生效明暗）')
+        : bad('面板换肤', JSON.stringify(got) + ' auto期望=' + autoLight);
+      (light.ls.getItem('night-owl:theme') === 'light')
+        ? ok('面板换肤：结果写进 localStorage（首帧防闪缓存）')
+        : bad('面板换肤缓存', String(light.ls.getItem('night-owl:theme')));
     });
   })();
 });
@@ -1203,6 +1415,52 @@ afterSections(function () {
   (!env2.isDark())
     ? ok('读取恢复后 tick：页面回到白天')
     : bad('读取恢复', '仍为暗');
+});
+
+/* [12] 面板换肤：两套主题的 CSS 变量必须齐全
+ *
+ * popup / 设置页靠 html.nw-light 切亮暗（见 AGENTS.md 不变量 9）。最容易犯的
+ * 错是"加了个新颜色只写在 :root 里"，亮色下那一处就漏了。这里做静态校验：
+ *   1) CSS 里用到的每个 var(--x) 都必须在 :root 里有定义；
+ *   2) :root 里的颜色变量必须在 html.nw-light 里也给出取值
+ *      —— 纯尺寸变量（--radius）列进白名单豁免。
+ * 换句话说：以后往面板里加颜色，你没法"只改暗色那一套"。
+ */
+afterSections(function () {
+  console.log('[12] 面板换肤 CSS（两套主题变量齐全）');
+  var LAYOUT_ONLY = ['radius'];   // 纯尺寸/结构变量，不需要两套主题各定义一份
+
+  /* 取出某个选择器块里声明的变量名（这些块里没有嵌套大括号，取首个 } 即可） */
+  function themeVars(css, selector) {
+    var i = css.indexOf(selector + ' {');
+    if (i < 0) return null;
+    var end = css.indexOf('}', i);
+    if (end < 0) return null;
+    var body = css.slice(i + selector.length, end);
+    var out = [], m, re = /--([a-z0-9-]+)\s*:/g;
+    while ((m = re.exec(body))) out.push(m[1]);
+    return out;
+  }
+
+  [['popup', 'src/popup/popup.css'], ['options', 'src/options/options.css']].forEach(function (pair) {
+    var name = pair[0], css = read(pair[1]);
+    var base = themeVars(css, ':root');
+    var light = themeVars(css, 'html.nw-light');
+    if (!base || !light) {
+      bad(name + ' 主题变量', '缺 :root 或 html.nw-light 变量块');
+      return;
+    }
+    var used = [], m, re = /var\(--([a-z0-9-]+)/g;
+    while ((m = re.exec(css))) if (used.indexOf(m[1]) < 0) used.push(m[1]);
+
+    var undef = used.filter(function (k) { return base.indexOf(k) < 0; });
+    var missingInLight = base.filter(function (k) {
+      return LAYOUT_ONLY.indexOf(k) < 0 && light.indexOf(k) < 0;
+    });
+    (!undef.length && !missingInLight.length)
+      ? ok(name + '：' + base.length + ' 个变量，用到的都有定义且亮色主题齐全')
+      : bad(name + ' 主题变量', JSON.stringify({ undefined: undef, missingInLight: missingInLight }));
+  });
 });
 
 finish();

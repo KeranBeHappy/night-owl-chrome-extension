@@ -131,6 +131,34 @@
     "message": "The master switch is off — enable it above before picking a mode.",
     "description": "Mode segment disabled while master switch is off"
   },
+  "popupUnsupported": {
+    "message": "Due to browser security restrictions, the extension can't run on this page (e.g. browser settings, Web Store, PDF viewer).",
+    "description": "Unsupported page notice"
+  },
+  "popupLearnMore": {
+    "message": "Learn more",
+    "description": "Button that opens the settings page for details"
+  },
+  "tabOther": {
+    "message": "Other",
+    "description": "Settings tab"
+  },
+  "lblOtherLimits": {
+    "message": "About browser security restrictions",
+    "description": "Other tab: group label"
+  },
+  "hintOtherLimits": {
+    "message": "For security reasons, the browser blocks extensions from injecting scripts into: internal pages (chrome://, edge://), the Web Store, PDF viewers, and other extensions' pages. The toolbar icon shows a yellow exclamation mark there and night mode can't apply — this is a browser limitation, not a bug.",
+    "description": "Other tab: which pages are restricted"
+  },
+  "hintOtherFile": {
+    "message": "For local files (file://), enable \"Allow access to file URLs\" on the extension details page first.",
+    "description": "Other tab: local file note"
+  },
+  "hintOtherNormal": {
+    "message": "Regular websites are not affected. If a page doesn't darken as expected, check the site tri-state in the popup or the lists in Settings.",
+    "description": "Other tab: normal pages and troubleshooting"
+  },
   "popupNotNow": {
     "message": "Daytime right now",
     "description": "Auto mode currently day"

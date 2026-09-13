@@ -57,7 +57,7 @@
 
 ### 通信通道（重要，不要改回去）
 
-popup 与设置页**不依赖** `chrome.runtime.onMessage`。
+面板与后台之间只有两条通道，**都不使用 `chrome.runtime.onMessage`**。
 
 原因：在某些 Chrome 构建上，Service Worker 里的 `runtime.onMessage`
 会注册失败（可在 `Secure Preferences` → `serviceworkerevents` 里实证：
@@ -65,10 +65,13 @@ popup 与设置页**不依赖** `chrome.runtime.onMessage`。
 一旦如此，所有"发消息给后台"的操作都会石沉大海 —— 表现就是
 **面板里的改动关掉再打开又变回原样**。
 
-因此面板直接读写 `chrome.storage.local`（`src/lib/store.js`），
-`storage.onChanged` 在后台承接"变更 → 广播到所有标签页"的职责。
-`sendMessage` 只保留为"顺手通知后台刷新角标"的尽力而为通道，
-失败不影响任何功能，也不会弹错误提示。
+1. `chrome.storage.local`：面板直接读写（`src/lib/store.js`），后台的
+   `storage.onChanged` 承接"变更 → 刷徽标 → 广播到所有标签页"。
+2. `chrome.alarms` 信号闹钟：面板落盘后再把整份配置编码进 alarm name 发给后台，
+   后台收到即采信，不回读 storage（本机回读有"写一拍滞后"，读到的可能是旧快照）。
+
+消息通道（`runtime.onMessage`）已整体删除：它在上述构建里注册不上，
+面板也不再依赖它，留着只是死代码。
 
 改动这一层前请先读 `src/lib/store.js` 顶部注释与 `tools/check.js` 的 `[9]` 段。
 
@@ -94,7 +97,7 @@ night-owl/
 │   │   ├── sun.js         # NOAA 日出日落算法（纯本地计算）
 │   │   ├── matcher.js     # 黑白名单规则解析与匹配
 │   │   ├── filter.js      # 滤镜构造（渲染与预览共用）
-│   │   ├── store.js       # popup/options 直连 storage 的通道（不依赖 onMessage）
+│   │   ├── store.js       # popup/options 直连 storage + 信号闹钟（不依赖 onMessage）
 │   │   ├── cities.data.js # 内置 3300 城精简库（自动生成，仅设置页加载）
 │   │   └── cities.js      # 经纬度 → 最近城市（本地最近邻匹配）
 │   ├── popup/             # 工具栏弹窗
@@ -115,8 +118,8 @@ node tools/check.js
 自检覆盖多个段落，其中两段专门守住"面板改了不生效"这类问题：
 
 - `[8] broadcast`：任何主动操作都必须真的广播到标签页
-- `[9] storage 直写通道`：在**模拟 `runtime.onMessage` 完全不可用**的环境下，
-  用最小 DOM 夹具真跑一遍 popup，断言读得到、写得进、不误报错误
+- `[9] storage 直写通道`：用最小 DOM 夹具真跑一遍 popup，断言读得到、写得进、
+  徽标同帧翻转、落盘后发信号闹钟，且全程不依赖任何消息通道
 - `[11] content.js 抗回退`：页面收到任何提醒消息（tick / 补注入）都只回读 storage，
   陈旧消息不得把页面打回旧状态（守住「点了白天闪一下又变黑夜」这类时序回退）
 

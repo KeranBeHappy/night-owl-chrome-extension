@@ -17,6 +17,7 @@
     enabled: true,               // 总开关
     mode: 'auto',                // 'auto' | 'dark' | 'light'
     manualUntil: 0,              // 手动模式失效时刻（毫秒时间戳）；0 表示不锁定
+    savedAt: 0,                  // 最近一次写入的时间戳（供跨上下文对账取新）
     theme: {
       invert: 92,                // 反色强度 %（60–100）
       brightness: 100,           // %
@@ -116,6 +117,13 @@
       c.mode = 'auto';
       c.manualUntil = 0;
     }
+
+    /* savedAt：最近一次写入的时间戳。本机 Chrome 的 storage 回读有"写一拍
+     * 滞后"（其它上下文刚写完，本上下文第一次读是旧快照），而
+     * storage.onChanged 事件又时灵时不灵 —— 各上下文手里的 config 快照
+     * 可能新旧不一。写入方都打 savedAt，消费方比较时间戳取最新，
+     * 两个怪癖就都无害了（谁写的时间新信谁）。 */
+    c.savedAt = Math.max(0, Number(c.savedAt) || 0);
 
     var t = c.theme;
     t.invert = Math.round(clamp(t.invert, 60, 100));

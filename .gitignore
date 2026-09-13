@@ -4,3 +4,7 @@
 # badge.e2e.js 真机运行的日志快照（一次性证据，结论已沉淀进 check.js 回归断言）
 tools/badge.out.txt
 tools/badge.err.txt
+
+# 已删除的真机调试脚本（badge.tab.debug.js）留下的运行快照，同样不入库
+tools/badge.tab.debug.out.txt
+tools/badge.tab.debug.err.txt

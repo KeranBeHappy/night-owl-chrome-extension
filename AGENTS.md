@@ -33,19 +33,24 @@ python tools/make_icons.py   # 仅当图标需要重新生成时
 
 ```
 config.js（schema + normalize）  ←  一切配置读写的唯一入口
-   ├── sun.js     昼夜判定 / 下一次切换点（NOAA 算法，纯本地）
+   ├── sun.js     昼夜判定 / 下一次切换点 / 徽标唯一出口 badgeState（NOAA 算法，纯本地）
    ├── matcher.js 黑白名单三态与匹配
    ├── filter.js  滤镜串构造（渲染与预览共用）
-   └── store.js   popup/options 直连 chrome.storage.local
+   └── store.js   popup/options 直连 chrome.storage.local + 发信号闹钟
 background.js（SW）：排程 alarms、徽标、右键菜单、快捷键、广播
 content.js：页面渲染引擎（防白闪：sessionStorage 缓存 + 异步校准）
 popup / options：UI 面板
 ```
 
-通信通道（**重要，不要改回去**）：popup 与设置页**不依赖** `chrome.runtime.onMessage`，
-直接读写 `chrome.storage.local`（`src/lib/store.js`），由 `storage.onChanged` 在后台
-承接"变更 → 广播到所有标签页"。`sendMessage` 只作为刷新角标的尽力而为通道，失败静默。
-原因与证据见 `README.md`「通信通道」与 `tools/check.js` 的 `[9]` 段。
+通信通道（**重要，不要改回去**）：只有两条，都是本地的。
+1. `chrome.storage.local` —— 配置的真相来源。popup / 设置页直写（`src/lib/store.js`），
+   后台的 `storage.onChanged` 接力：刷徽标、重排闹钟、广播到所有标签页（`content.js` 自己也监听）。
+2. `chrome.alarms` —— 唤醒与定时中枢。UI 落盘后再发一个**信号闹钟**：把整份 config 编码进
+   alarm name（`'nw{' + JSON.stringify(config)`），后台收到即采信、**不回读 storage**
+   （本机回读有"写一拍滞后"）。前缀在 `store.js` 与 `background.js` 各有一份，`check.js` 有断言钉住。
+
+`chrome.runtime.onMessage` **已整体删除**（本机 Chrome 152 上它根本注册不上，UI 也不再依赖，
+留着就是死代码）。历史与证据见 `tools/check.js` 的 `[6]`/`[9]` 段。
 
 ## 关键不变量（改代码前先对照）
 
@@ -59,19 +64,33 @@ popup / options：UI 面板
    不落名单 / 黑名单 / 白名单。白名单优先级最高；三个状态互斥，切换时先清两边旧规则。
    旧的 `setSiteDark/toggleSiteDark` 保留为兼容层，内部委托三态。
 4. **`config.enabled` 总开关只属于设置页**，popup 里没有总开关。
-5. **徽标语义**：黑夜 `ON`，白天（含总开关关闭）`OFF`，不许再出现"白天留空"。
+5. **徽标只有一个全局值**：黑夜 `ON`（绿），白天（含总开关关闭）`OFF`（灰），
+   判定与颜色统一由 `SUN.badgeState(config)` 提供，三个写入方（popup / options / background）
+   共用。**绝对不要写 per-tab 徽标**（`setBadgeText({tabId})`）：Chrome 没有"解除覆盖"的 API，
+   一旦写了就得永远维护它 —— 历史上"受限页黄叹号"就是这么引出回读→兜底→被写空→
+   徽标永久消失的一整条链，最后整套删除。受限页只在 popup 里提示"不支持"。
 6. **用户主动改变昼夜/名单的每个路径都必须触发广播**：要么 `saveConfig(config, true)`，
    要么写 storage 靠 `storage.onChanged`。否则就是"面板改了页面不变"的老 bug。
 7. **SW 无常驻状态**：动 `background.js` 里的 `config` 前必须先 `loadConfig()`；
    所有监听器经 `onEvent` 隔离注册，一个失败不能拖死其他监听器。
+   **监听器总数恒为 8**（`tabs.onActivated` 是条件注册，与它兜底的 `onShown` 互斥）；
+   增删监听器要同步 `background.js` 的 `report()` 与 `check.js` 的 `[6]` 段断言。
 8. **content_scripts 的 js 列表在 `manifest.json` 里手工维护**：新增 lib 文件必须同步加进去，
    且顺序即依赖顺序；lib 文件必须同时兼容浏览器（挂 `NW.*`）与 node（`module.exports`）。
+9. **面板换肤跟随"生效明暗"**：popup / 设置页用 `html.nw-light` + CSS 变量跟随
+   `SUN.badgeState(config)`（与徽标同一个判定）—— 黑夜暗色（`:root` 默认），
+   白天 / 总开关关闭亮色。**新增颜色一律走变量**（两套主题各定义一份），不要在规则里硬编码。
+   popup 在脚本开头按 `localStorage['night-owl:theme']` 做"首帧上色"防闪；
+   设置页会长时间开着，必须按 `SUN.nextSwitch().at` 排定时器（拿不到则 60s 兜底）自己换肤 ——
+   自动模式的昼夜切换不会产生任何 storage 事件。
 
 ## 改动后的固定动作（按改动类型）
 
 - **改了 popup / options 的 DOM**：必须同步 `tools/check.js` 的 `makePopupDom()`
   —— nodes 列表 + `querySelectorAll(sel)` 分支，否则 `[9]` 段静默走空、断言失效。
   在夹具里点按钮用 `node.click()`（自动带 `currentTarget`），不要用 `_h.click()`。
+  popup 用到 `document.documentElement`（换肤）与 `localStorage`（首帧缓存），
+  这两样夹具里都有对应桩，删掉就会让 `[9]` 段崩。
 - **加了 i18n key**：必须同时加到 `_locales/en` 与 `_locales/zh_CN`（`[7]` 段校验两库
   key 集合一致与占位符）。HTML 里用 `data-i18n`，JS 里用 `msg('key', [args])`。
 - **改了昼夜判定 / 名单语义 / 通道**：在 `tools/check.js` 对应段落补回归断言。

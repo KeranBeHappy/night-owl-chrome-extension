@@ -10,16 +10,24 @@
  *   Every listener is registered in its OWN try/catch block. They must never
  *   share one block. Reason: if any single registration line throws, a shared
  *   block aborts and silently kills every registration after it.
- *   This is exactly what killed runtime.onMessage once:
- *   contextMenus.onClicked threw on Chrome 152, onMessage was declared last,
- *   so onMessage was never registered. Result: popup / options could not talk
- *   to the background at all - "changes revert when I close the panel",
- *   "right-click whitelist does nothing". No error was visible anywhere
- *   because the popup swallowed the empty response.
+ *   Real incident: contextMenus.onClicked threw on Chrome 152 and killed the
+ *   registration declared after it (then runtime.onMessage), so the UI could
+ *   not talk to the background at all - "changes revert when I close the
+ *   panel" - with no visible error anywhere.
  *
- *   Order also matters for damage control: runtime.onMessage and
- *   storage.onChanged go first, because they are the two channels the UI
- *   depends on. If something later fails, the UI still works.
+ *   Order also matters for damage control: storage.onChanged goes first,
+ *   because it is the channel everything else depends on. If something later
+ *   fails, the UI still works.
+ *
+ * CHANNELS (two, both local-only - the extension never talks to the network):
+ *   1. chrome.storage.local (+ storage.onChanged) - 配置的真相来源。
+ *      popup/options 直写，本 SW 的 onChanged 接力：刷徽标、重排闹钟、广播页面。
+ *   2. chrome.alarms - SW 的唤醒与定时中枢。
+ *      · 'nw{...}' 信号闹钟：UI 落盘后把整份 config 编码进 name 发过来，
+ *        本 SW 收到即采信（绝不回读 storage - 本机回读有"写一拍滞后"）；
+ *      · 'nw-switch' 昼夜切换闹钟：到点重算状态。
+ *   注：runtime.onMessage 已彻底不用 —— 本机 Chrome 152 上它根本注册不上，
+ *   UI 也不再依赖它（历史上为它写过一堆兜底，全是死代码，已删除）。
  */
 
 var NATIVE_OK = true;
@@ -119,7 +127,6 @@ function i18n(key) {
  */
 var REG_FAIL = [];    // required listeners that could not be registered
 var REG_SKIP = [];    // optional listeners whose API does not exist here
-var MESSAGING_OK = false;  // true once runtime.onMessage is actually live
 
 /* Collect every plausible location for an event, in priority order.
  *
@@ -250,9 +257,33 @@ function createMenus() {
 
 /* ---------- config ---------- */
 
-function loadConfig() {
+function readRawConfig() {
   return cbCall(chrome.storage.local.get, 'config').then(function (res) {
-    config = CFG ? CFG.normalize(res && res.config) : (res && res.config);
+    return res && res.config;
+  });
+}
+
+/* 回读 storage 并采用，带两个怪癖的防护：
+ * 1. "写一拍滞后"（其它上下文刚写完，本上下文第一次回读是旧快照）→ 用
+ *    savedAt 时间戳对账：回读命中的快照比内存旧就直接丢弃，保留内存状态；
+ * 2. storage.onChanged 时灵时不灵、内存 config 可能停留在旧值 → 回读一次即
+ *    可校正（savedAt 会告诉我们哪边更新）。
+ * 需要"刚落盘的值"的路径（UI 改动）走信号闹钟，压根不回读这里。 */
+function loadConfig() {
+  return readRawConfig().then(function (raw) {
+    var incoming = CFG ? CFG.normalize(raw) : raw;
+    if (config && (config.savedAt || 0) > (incoming.savedAt || 0)) {
+      /* 回读命中滞后旧快照（比内存还旧）：保留内存中的较新状态。
+       * 过期自愈的收敛交给后续 loadConfig/闹钟路径。 */
+      return config;
+    }
+    config = incoming;
+    /* 过期手动模式被 normalize 自愈（原始 mode 非 auto、normalize 后变 auto）
+     * 时，必须立即落盘并广播：自愈只改内存的话，徽标/排程按 auto 计算，
+     * 而页面还停留在最后一次广播的状态 —— 状态分裂。 */
+    if (raw && raw.mode && raw.mode !== 'auto' && config.mode === 'auto') {
+      saveConfig(config, true);
+    }
     return config;
   }).catch(function () {
     config = CFG ? CFG.normalize(null) : null;
@@ -265,10 +296,11 @@ function loadConfig() {
  * true, otherwise pages keep the old look until they happen to re-read. */
 function saveConfig(next, notify) {
   config = CFG ? CFG.normalize(next) : next;
+  config.savedAt = Date.now();   // 落盘打时间戳：供各上下文按 savedAt 对账取新
   updating = true;
   return cbCall(chrome.storage.local.set, { config: config }).then(function () {
     scheduleNext();
-    updateBadge('saveConfig');
+    syncBadge('saveConfig');
     if (notify) broadcast(false);
     return config;
   }).catch(function () {
@@ -312,16 +344,25 @@ function expireManual() {
   return true;
 }
 
-function updateBadge(tag) {
+/* 徽标：只有一个全局值（黑夜 ON 绿 / 白天 OFF 灰），判定与颜色统一由
+ * sun.badgeState 提供 —— 三个写入方（popup / options / 本 SW）共用同一出口。
+ *
+ * 为什么彻底不用 per-tab 徽标（历史教训，别再走回头路）：
+ *   Chrome 的 per-tab 徽标一旦写入就与全局断开，且**没有"解除覆盖"的 API**。
+ *   当初为了「受限页黄叹号」用了 per-tab，于是被迫连锁：切页时要重写覆盖值 →
+ *   需要知道"当前全局值" → 回读 → 本机回读不可靠 → 过滤/兜底/残留纠正/启动
+ *   补算……任何一环把值写成空串，那个标签页的徽标就永久消失（用户看到的
+ *   "ON/OFF 不主动显示、点开 popup 才出现"就是这么来的）。
+ *   现在改成：徽标只表达全局昼夜（受限页在 popup 有「不支持」提示块、设置页
+ *   有说明），写入方永远只写全局值 —— 无覆盖、无回读、无残留。 */
+function syncBadge(tag) {
   if (!config || !SUN) return;
-  /* 徽标明确表达当前明暗：黑夜 ON，白天或总开关关闭 OFF。 */
-  var on = config.enabled && SUN.shouldBeDark(config);
-  var text = on ? 'ON' : 'OFF';
   try {
-    chrome.action.setBadgeText({ text: text });
-    chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
-    /* tag 标明调用点，mode/until 便于事后从 SW 控制台定位"谁用旧状态覆盖了徽标" */
-    console.debug('[Night Owl] badge ->', text,
+    var s = SUN.badgeState(config);
+    chrome.action.setBadgeText({ text: s.text });
+    chrome.action.setBadgeBackgroundColor({ color: s.color });
+    /* tag 标明调用点，便于从 SW 控制台定位"谁最后一次写了徽标" */
+    console.debug('[Night Owl] badge ->', s.text,
       '(background:' + (tag || '?') + ')',
       'mode=' + config.mode, 'until=' + config.manualUntil, 'now=' + Date.now());
   } catch (e) { }
@@ -438,20 +479,6 @@ function toggleWhitelistFor(url) {
   MATCH.toggleWhitelist(config, url);
 }
 
-/* popup: set an explicit target state, the two lists stay mutually exclusive */
-function setSiteDark(url, wantDark) {
-  if (!url || !MATCH) return;
-  MATCH.setSiteDark(config, url, !!wantDark);
-}
-
-/* popup: per-site toggle. currentDark is the site's EFFECTIVE state (lists
- * included). Falls back to the global state only when not supplied. */
-function toggleSiteDark(url, currentDark) {
-  if (!url || !MATCH) return;
-  var dark = (typeof currentDark === 'boolean') ? currentDark : SUN.shouldBeDark(config);
-  MATCH.toggleSiteDark(config, url, dark);
-}
-
 function isHttpUrl(url) {
   return typeof url === 'string' && url.indexOf('http') === 0;
 }
@@ -488,113 +515,19 @@ function toggleDayNight() {
  * Listener registration - one block per listener, no shared try/catch.
  * ========================================================================= */
 
-/* (1) runtime.onMessage - the optional fast channel for the UI.
- * The popup and options page do NOT depend on it any more: they read and write
- * chrome.storage.local directly and rely on storage.onChanged below. This is
- * now purely an accelerator (it lets a panel see a save acknowledgement and
- * lets the popup ping us on open).
+/* (1) storage.onChanged - 变更的主通道（popup/options 直写 storage 后由它接力）。
  *
- * It is registered FIRST for historical damage control, but note that the
- * previous attempt to make ordering the safety mechanism did not work: on the
- * real Chrome 152 profile this listener failed to register while the six
- * declared after it succeeded, so ordering was never the actual protection.
- * Real protection is (a) independent try/catch per listener, and (b) the UI
- * not having a hard dependency on any single channel. */
-MESSAGING_OK = onEvent('runtime.onMessage', function (msg, sender, sendResponse) {
-  if (!msg || !msg.type) return;
-
-  if (msg.type === 'nw:ping') {
-    sendResponse({ ok: true, version: CFG ? CFG.VERSION : null });
-    return;
-  }
-
-  /* The popup / options page already wrote chrome.storage.local themselves.
-   * This is only a nudge so the badge and the next-switch alarm are refreshed
-   * without waiting for storage.onChanged to wake the worker. We deliberately
-   * do NOT write storage here - a double write would fire a second
-   * storage.onChanged and a redundant broadcast. Just re-derive the derived
-   * state from the already-persisted value. */
-  if (msg.type === 'nw:saved') {
-    /* 关键：直接采用消息携带的刚落盘配置，绝不能在这里 loadConfig() 重读。
-     * 实证（tools/badge.e2e.js）：本机构建上其它上下文刚 set 完，SW 侧立刻
-     * get 会拿到"上一次"的旧值 —— 点白天后事件里是 light，紧随的 get 却是
-     * dark/auto，把徽标写回 ON。这正是"徽标不跟着变 OFF"的根因。 */
-    if (msg.config) {
-      config = CFG ? CFG.normalize(msg.config) : msg.config;
-      scheduleNext();
-      updateBadge('nw:saved');
-    } else {
-      loadConfig().then(function () {
-        scheduleNext();
-        updateBadge('nw:saved');
-      }).catch(function () { });
-    }
-    sendResponse({ ok: true });
-    return;
-  }
-
-  if (msg.type === 'nw:save') {
-    saveConfig(msg.config, true).then(function (saved) {
-      sendResponse({ ok: true, config: saved });
-    }).catch(function (e) {
-      sendResponse({ ok: false, error: String(e && e.message) });
-    });
-    return true;
-  }
-
-  if (msg.type === 'nw:read') {
-    loadConfig().then(function (c) {
-      sendResponse({
-        ok: true,
-        config: c,
-        dark: SUN.shouldBeDark(c),
-        window: SUN.resolveWindow(c),
-        next: SUN.nextSwitch(c)
-      });
-    }).catch(function (e) {
-      sendResponse({ ok: false, error: String(e && e.message) });
-    });
-    return true;
-  }
-
-  if (msg.type === 'nw:site-toggle') {
-    /* all three parameter styles converge on one mutually-exclusive path */
-    loadConfig().then(function () {
-      if (typeof msg.dark === 'boolean' || typeof msg.wantDark === 'boolean') {
-        setSiteDark(msg.url, typeof msg.dark === 'boolean' ? msg.dark : msg.wantDark);
-      } else {
-        toggleSiteDark(msg.url, msg.currentDark);
-      }
-      return saveConfig(config, true);
-    }).then(function (saved) {
-      sendResponse({ ok: true, config: saved });
-    }).catch(function (e) {
-      sendResponse({ ok: false, error: String(e && e.message) });
-    });
-    return true;
-  }
-
-  return undefined;
-});
-
-/* (2) storage.onChanged - THE lifeline.
- *
- * This is now the primary path, not a fallback. The popup and options page
- * write chrome.storage.local directly, so every user change arrives here. It
- * must therefore do the full job on its own: adopt the new config, reschedule
- * the alarm, refresh the badge, and push the new state to every open tab.
- *
- * `updating` is only true while the BACKGROUND itself is writing, in which
- * case saveConfig() already broadcast and we must not do it twice. */
+ * 它必须独立完成全套动作：采用新配置、重排闹钟、刷新徽标、把新状态推给所有
+ * 标签页。`updating` 只在"后台自己写 storage"时为 true —— 那时 saveConfig()
+ * 已经广播过，不能重复广播。 */
 var broadcastTimer = null;
 onEvent('storage.onChanged', function (changes, area) {
   if (area !== 'local' || !changes.config) return;
   try {
     config = CFG ? CFG.normalize(changes.config.newValue) : changes.config.newValue;
-    /* 徽标先更新，排程在后：本机 runtime.onMessage 不注册，storage.onChanged
-     * 是徽标唯一的更新来源；排程一旦抛错绝不能连累它（以前 updateBadge 排在
-     * scheduleNext 之后，正是徽标"切了白天还挂着 ON"的候选成因之一）。 */
-    updateBadge('storage.onChanged');
+    /* 徽标先更新、排程在后：排程一旦抛错绝不能连累徽标（历史上徽标更新排在
+     * scheduleNext 之后，正是"切了白天还挂着 ON"的成因之一）。 */
+    syncBadge('storage.onChanged');
     scheduleNext();
   } catch (e) {
     console.warn('[Night Owl] storage.onChanged handler failed:', e && e.message);
@@ -609,18 +542,54 @@ onEvent('storage.onChanged', function (changes, area) {
    * we are here to eliminate. */
   clearTimeout(broadcastTimer);
   broadcastTimer = setTimeout(function () {
-    /* inject=true: re-inject content scripts into tabs that do not answer.
-     * This matters more than it used to. With onMessage unavailable, this
-     * storage-driven broadcast is the ONLY way a config change reaches a page,
-     * and tabs that were open before the extension loaded have no content
-     * script to receive it. Without the inject path those tabs would keep the
-     * old look forever - "I changed the setting and this page never reacted". */
+    /* inject=true: 对不回答的标签页补注入内容脚本。配置变更能到页面的通道只有
+     * 本 SW 的 nw:tick（外加页面自己的 storage.onChanged），而扩展加载前就开着
+     * 的标签页可能根本没有内容脚本 —— 没有补注入它们会永远保持旧外观
+     * （"我改了设置，这个页面没反应"）。 */
     broadcast(true);
   }, 50);
 });
 
-/* (3) alarms.onAlarm */
+/* (2) alarms.onAlarm */
+/* 前缀必须与 store.js 的 SIGNAL_PREFIX 一致（check.js 有断言钉住）。 */
+var ALARM_SIGNAL_PREFIX = 'nw{';   // name 编码：'nw{' + JSON.stringify(config)
+
+/* UI（popup/options）落盘后把整份 config 编码进 alarm name 发过来。
+ * alarms 是本机 SW 唯一可靠的唤醒/回调机制（onMessage 注册不上、onChanged
+ * 时灵时不灵、回读 storage 有写一拍滞后）—— 收到的 config 直接采信（写入方
+ * 是权威，绝不回读 storage 二次确认），savedAt 乱序保护后全量收敛：
+ * 全局徽标 + 页面广播。 */
+function adoptRemoteConfig(incomingRaw) {
+  var incoming = CFG ? CFG.normalize(incomingRaw) : incomingRaw;
+  if (config && (config.savedAt || 0) > (incoming.savedAt || 0)) {
+    /* 乱序信号（迟到的旧状态）：丢弃，避免旧值覆盖新值 */
+    console.debug('[Night Owl] signal ignored (older savedAt)');
+    return null;
+  }
+  config = incoming;
+  /* 手动模式在信号途中过期（popup 写时未到期、alarm 到达时已过）：
+   * 按 auto 收敛并落盘广播。 */
+  if (config.mode !== 'auto' && config.manualUntil && Date.now() >= config.manualUntil) {
+    config.mode = 'auto';
+    config.manualUntil = 0;
+    return saveConfig(config, true);
+  }
+  scheduleNext();
+  syncBadge('nw-signal');
+  broadcast(false);
+  return null;
+}
+
 onEvent('alarms.onAlarm', function (alarm) {
+  var name = alarm && alarm.name;
+  if (name && name.indexOf(ALARM_SIGNAL_PREFIX) === 0) {
+    try {
+      adoptRemoteConfig(JSON.parse(name.slice(ALARM_SIGNAL_PREFIX.length)));
+    } catch (e) {
+      console.warn('[Night Owl] signal parse failed:', e && e.message);
+    }
+    return;
+  }
   if (!alarm || alarm.name !== ALARM_SWITCH) return;
   console.debug('[Night Owl] alarm fired, scheduledAt=', alarm.scheduledTime, 'now=', Date.now());
   loadConfig().then(function () {
@@ -630,7 +599,7 @@ onEvent('alarms.onAlarm', function (alarm) {
       return saveConfig(config, true);
     }
     scheduleNext();
-    updateBadge('alarm');
+    syncBadge('alarm');
     broadcast(true);   // SW may have been recycled - re-inject to be safe
   }).catch(function () { });
 });
@@ -666,7 +635,7 @@ onEvent('runtime.onInstalled', function () {
 onEvent('runtime.onStartup', function () {
   loadConfig().then(function () {
     scheduleNext();
-    updateBadge();
+    syncBadge('startup');
   }).catch(function () { });
 });
 
@@ -734,7 +703,7 @@ if (!chrome.contextMenus || !chrome.contextMenus.onShown) {
  * and options page genuinely cannot work, and the user sees "changes revert"
  * with no explanation. Say so plainly. Anything else is a degraded feature,
  * reported at warn level so it does not look like a crash. */
-var CRITICAL = ['runtime.onMessage', 'storage.onChanged'];
+var CRITICAL = ['storage.onChanged'];
 
 function report() {
   var crippled = REG_FAIL.filter(function (n) {
@@ -743,39 +712,36 @@ function report() {
   var soft = REG_FAIL.filter(function (n) { return crippled.indexOf(n) < 0; });
 
   if (crippled.length) {
-    /* A missing onMessage does NOT break the extension any more: the popup and
-     * options page read and write chrome.storage.local directly and the
-     * storage.onChanged listener (registered below) still drives the tabs.
-     * Report it as a degradation, and name the working path, so this cannot be
-     * mistaken for "everything is broken". */
-    console.warn('[Night Owl] runtime.onMessage unavailable on this Chrome build - '
-      + 'popup/options are using the direct chrome.storage path instead. Messaging-based '
-      + 'features (keyboard shortcut replies) will be limited. Detail: ' + crippled.join(' | '));
+    /* storage.onChanged 是唯一的"变更"入口：它没了，popup/options 改了配置
+     * 也没人广播、更没人刷徽标。这是真正的致命缺失，必须说清楚。 */
+    console.warn('[Night Owl] storage.onChanged unavailable - popup/options save '
+      + 'changes but nothing can react to them. Detail: ' + crippled.join(' | '));
   }
   if (soft.length) {
     console.warn('[Night Owl] optional features unavailable on this Chrome build: ' + soft.join(' | '));
   }
 
+  /* 监听器总数 = onEvent 调用点数量（tabs.onActivated 是条件注册，两个分支
+   * 互斥，所以恒等于 8）。改监听器数量时这里和 check.js 的断言要同步。 */
   var okn = 8 - REG_FAIL.length - REG_SKIP.length;
   console.log('[Night Owl] ready - listeners ok=' + okn
     + ' failed=' + REG_FAIL.length
     + ' optional-skipped=' + REG_SKIP.length
     + (REG_SKIP.length ? ' [' + REG_SKIP.join(',') + ']' : '')
-    + ' native=' + NATIVE_OK
-    + ' mode=' + (MESSAGING_OK ? 'messaging+storage' : 'storage-only'));
+    + ' native=' + NATIVE_OK);
 }
 
 if (NATIVE_OK) {
   loadConfig().then(function () {
     scheduleNext();
-    updateBadge('startup');
+    syncBadge('startup');
     report();
   }).catch(function () { report(); });
 } else {
   loadConfig().then(function () {
     createMenus();
     scheduleNext();
-    updateBadge('startup');
+    syncBadge('startup');
     report();
   }).catch(function () { report(); });
 }

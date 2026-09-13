@@ -9,6 +9,20 @@
   --radius: 8px;
 }
 
+/* 亮色（白天）主题：popup.js 按"当前实际生效的明暗"给 <html> 挂 .nw-light。
+ * 变量是唯一的换肤入口 —— 新增颜色一律走变量，不要在规则里硬编码。 */
+html.nw-light {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --panel-2: #e4e7ec;
+  --text: #1b1d21;
+  --muted: #6b7280;
+  --accent: #6b62d6;
+  --moon: #f0b429;
+}
+/* 白天是太阳：不做月牙缺口（.moon::after 用 --bg 画遮罩，亮色下会变成浅色缺口） */
+html.nw-light .moon::after { display: none; }
+
 * { box-sizing: border-box; }
 
 body {
@@ -85,6 +99,8 @@ h1 { font-size: 14px; font-weight: 500; margin: 0; }
   font-weight: 600;
   line-height: 1.4;
 }
+/* 亮色下 #d9534f 在浅灰底上偏浅，压深一档保证可读 */
+html.nw-light .status.error { color: #c0392b; }
 
 .row { margin-bottom: 12px; }
 .row-label {
@@ -134,6 +150,21 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rg
 .site-seg { background: var(--bg); }
 .site-seg button { padding: 6px 0; font-size: 11px; }
 .site-seg button.active { background: var(--panel-2); }
+
+/* 受限页面提示块：说明"为什么按钮都用不了" */
+.hint-block {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  margin-bottom: 12px;
+}
+.hint-block .hint-text {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.hint-block .link { font-size: 11px; }
 
 footer { display: flex; justify-content: flex-end; }
 .link {

@@ -131,6 +131,34 @@
     "message": "总开关已关闭：先开启上方的「启用」开关，才能切换昼夜模式。",
     "description": "总开关关闭时模式段禁用的提示"
   },
+  "popupUnsupported": {
+    "message": "由于浏览器安全限制，扩展程序无法在此页面生效（如浏览器设置页、应用商店、PDF 查看器等）。",
+    "description": "受限页面提示"
+  },
+  "popupLearnMore": {
+    "message": "了解更多",
+    "description": "受限页面提示的跳转按钮"
+  },
+  "tabOther": {
+    "message": "其他",
+    "description": "设置页标签页"
+  },
+  "lblOtherLimits": {
+    "message": "浏览器安全限制说明",
+    "description": "其他 tab：分组标题"
+  },
+  "hintOtherLimits": {
+    "message": "出于安全考虑，浏览器禁止扩展在以下页面注入内容脚本：浏览器设置页（chrome://、edge:// 等）、应用商店、PDF 查看器、其他扩展的页面等。打开这类页面时工具栏图标会显示黄色感叹号，夜间模式不会生效——这是浏览器的安全限制，不是扩展故障。",
+    "description": "其他 tab：受限页面范围说明"
+  },
+  "hintOtherFile": {
+    "message": "本地文件（file://）页面需要在扩展详情页开启「允许访问文件网址」后才能生效。",
+    "description": "其他 tab：本地文件说明"
+  },
+  "hintOtherNormal": {
+    "message": "普通网页不受上述限制。若某个网页没有按预期变暗，可先用弹窗底部的站点三态开关或设置页的黑白名单排查。",
+    "description": "其他 tab：普通页面说明与排查指引"
+  },
   "popupNotNow": {
     "message": "当前处于白天时段",
     "description": "自动模式下当前是白天"

@@ -10,8 +10,8 @@
  *   现在配置直接读写 chrome.storage.local：
  *     - 读：storage.local.get('config')
  *     - 写：storage.local.set({config})
- *   storage.onChanged 在后台是活的，变更会自然广播到所有标签页。
- *   sendMessage 只作为"顺手通知后台刷新角标"的尽力而为通道，
+ *   storage.onChanged 在后台是活的，变更会自然广播到所有标签页；
+ *   落盘后再发一个"信号闹钟"（store.signal）叫醒后台收敛徽标与排程，
  *   失败不提示用户 —— 因为落盘已经成功了。
  */
 (function () {
@@ -26,6 +26,36 @@
   var currentUrl = null;
   var previewTimer = null;
   var unsubscribe = null;
+
+  /* ---------- 面板换肤 ----------
+   * 面板跟着"当前实际生效的明暗"走（与网页夜间模式同一个判定，见 sun.badgeState）：
+   * 黑夜 → 暗色（CSS 默认），白天 / 总开关关闭 → 亮色（html.nw-light）。
+   * 只切 CSS 变量，不套任何滤镜，也不碰用户的外观参数。 */
+  var THEME_KEY = 'night-owl:theme';   // localStorage：给"首帧上色"当缓存
+
+  /* 首帧先按上次的明暗上色：popup 打开到 storage 回读完成之间有一段空白，
+   * 不做这一步会"先暗后亮"闪一下。真值等 refresh() 读完配置由 applyTheme 校准。 */
+  try {
+    if (localStorage.getItem(THEME_KEY) === 'light') {
+      document.documentElement.classList.add('nw-light');
+    }
+  } catch (e) { /* 存储不可用就退化为默认暗色，不影响功能 */ }
+
+  /** 按当前生效的明暗切换面板配色，并缓存结果供下次首帧使用。 */
+  function applyTheme() {
+    if (!config || !SUN) return;
+    var light = !SUN.badgeState(config).on;
+    try {
+      document.documentElement.classList.toggle('nw-light', light);
+      localStorage.setItem(THEME_KEY, light ? 'light' : 'dark');
+    } catch (e) { }
+  }
+
+  /* 受限页面：chrome:// 设置页、应用商店、PDF 查看器等，浏览器禁止注入
+   * 内容脚本，夜间模式无法生效。与 background.isInjectableUrl 同一口径。 */
+  function isUnsupported(url) {
+    return !url || String(url).indexOf('http') !== 0;
+  }
 
   function msg(key, subs) {
     try { return chrome.i18n.getMessage(key, subs); } catch (e) { return key; }
@@ -137,14 +167,18 @@
   }
 
   function render(state) {
-    /* 总开关是最顶层条件：关闭时昼夜模式按钮全部禁用，状态行会说明影响 */
+    /* 总开关是最顶层条件：关闭时昼夜模式按钮全部禁用，状态行会说明影响；
+     * 受限页面（chrome:// 等）上扩展无法生效，相关控件一并禁用并提示原因 */
     var on = !!config.enabled;
+    var supported = !isUnsupported(currentUrl);
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
-      buttons[i].disabled = !on;
+      buttons[i].disabled = !on || !supported;
       buttons[i].classList.toggle('active', buttons[i].getAttribute('data-mode') === config.mode);
     }
 
+    $('brightness').disabled = !supported;
+    $('temperature').disabled = !supported;
     $('brightness').value = config.theme.brightness;
     $('brightnessOut').textContent = config.theme.brightness + '%';
     $('temperature').value = config.theme.temperature;
@@ -152,6 +186,10 @@
       ? '+' + config.theme.temperature
       : String(config.theme.temperature);
 
+    var block = $('unsupportedBlock');
+    if (block) block.style.display = supported ? 'none' : '';
+
+    applyTheme();
     renderSite();
     renderStatus(state || stateFor(config));
   }
@@ -172,28 +210,32 @@
     });
   }
 
-  /* 徽标不依赖后台：扩展页面自己就能写 chrome.action。
-   * 本机 runtime.onMessage 不注册，nw:saved 提示到不了后台，storage.onChanged
-   * 唤醒 SW 也不可靠（时灵时不灵），所以徽标必须在点击的同一帧由面板自己
-   * 翻转，绝不等待任何异步链路（颜色值与 background.updateBadge 一致）。 */
+  /* 徽标同帧写（不依赖后台）：本机后台 onMessage 注册不上、onChanged 唤醒也
+   * 不可靠，所以点按钮的瞬间由面板自己把全局徽标改到位；后台稍后收到信号
+   * 闹钟会再收敛一次 —— 写的是同一个值，不冲突。
+   * 判定与颜色统一来自 sun.badgeState（三个写入方共用一个出口），并且只写
+   * 全局徽标、绝不写 per-tab：per-tab 覆盖没有"解除"API，写过一次就得永远
+   * 维护它（详见 background.js 里的说明）。 */
   function syncBadge(c) {
     if (!c || !SUN) return;
     try {
-      var on = !!c.enabled && SUN.shouldBeDark(c);
-      chrome.action.setBadgeText({ text: on ? 'ON' : 'OFF' });
-      chrome.action.setBadgeBackgroundColor({ color: on ? '#3B6D11' : '#8A8A8A' });
-      console.debug('[Night Owl] badge ->', on ? 'ON' : 'OFF', '(popup)');
+      var s = SUN.badgeState(c);
+      chrome.action.setBadgeText({ text: s.text });
+      chrome.action.setBadgeBackgroundColor({ color: s.color });
+      console.debug('[Night Owl] badge ->', s.text, '(popup)');
     } catch (e) { /* action API 不可用时只能靠后台，静默即可 */ }
   }
 
-  /* 落盘。先 normalize（保证存进去的永远是合法结构），再写 storage，
-   * 最后尽力通知后台刷新角标。 */
+  /* 落盘。先 normalize（保证存进去的永远是合法结构），写 storage，然后
+   * ①同帧写徽标 ②发信号闹钟唤醒后台（两条都不依赖消息通道）。 */
   function save() {
     config = CFG.normalize(config);
+    config.savedAt = Date.now();   // 供 SW 端按 savedAt 对账取新（回读可能滞后）
     return STORE.write(config).then(function () {
       ok();
-      syncBadge(config);   // 落盘成功即同步徽标，不等后台
-      return STORE.nudge({ type: 'nw:saved', config: config });
+      syncBadge(config);      // 徽标同帧翻转，不等后台
+      STORE.signal(config);   // 信号闹钟：把新配置带给后台（见 store.signal）
+      return config;
     }).catch(function (e) {
       fail(msg('msgNoBackground') + ' · ' + (e && e.message ? e.message : 'storage'));
     });
@@ -228,8 +270,8 @@
     var buttons = document.querySelectorAll('#modeSeg button');
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].addEventListener('click', function (e) {
-        /* 总开关是最顶层条件：关闭时昼夜切换不生效（按钮已禁用，这里兜底） */
-        if (!config || !config.enabled) return;
+        /* 总开关是最顶层条件：关闭或受限页面时昼夜切换不生效（按钮已禁用，这里兜底） */
+        if (!config || !config.enabled || isUnsupported(currentUrl)) return;
         var next = SUN.nextSwitch(config);
         CFG.setManualMode(config, e.currentTarget.getAttribute('data-mode'), next ? next.at : 0);
         /* 徽标与点击同帧翻转：放在 save() 的异步链里会"慢一拍"甚至丢失
@@ -277,6 +319,15 @@
 
     $('openOptions').addEventListener('click', function () {
       try { chrome.runtime.openOptionsPage(); } catch (e) { fail(); }
+    });
+
+    /* 了解更多：直达设置页「其他」tab，看浏览器安全限制的完整说明 */
+    $('learnMore').addEventListener('click', function () {
+      try {
+        chrome.tabs.create({
+          url: chrome.runtime.getURL('src/options/options.html?tab=other')
+        });
+      } catch (e) { fail(); }
     });
   }
 

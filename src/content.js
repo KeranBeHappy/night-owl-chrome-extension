@@ -39,7 +39,9 @@
   function buildCss(c) {
     var target = c.advanced.target === 'body' ? 'body' : 'html';
     var scope = target === 'body' ? 'html.nw-dark body' : 'html.nw-dark';
-    var css = scope + ' { filter: ' + FILTER.build(c.theme) + ' !important; }\n';
+    /* cfg 必须传：preserveMedia 开启时父级 invert 要固定为 1，下面的媒体逆运算才配得平
+     * （漏传会让父级落在用户强度上，与媒体的 invert(1) 补偿错位）。 */
+    var css = scope + ' { filter: ' + FILTER.build(c.theme, c) + ' !important; }\n';
 
     if (c.advanced.preserveMedia) {
       css += FILTER.MEDIA_SELECTOR.split(',').map(function (sel) {
@@ -182,7 +184,7 @@
     apply();
   }
 
-  /* 从 storage 读取最新配置并应用。fallbackRaw 仅在读取失败时兜底。
+  /* 从 storage 读取最新配置并应用。
    *
    * 本机 Chrome 的一个实测怪癖（tools/badge.e2e.js）：其它上下文刚
    * chrome.storage.local.set 完，这边立刻 get 会拿到"上一次"的旧值
@@ -190,19 +192,18 @@
    *   - nw:tick / 补注入优先采用消息携带的配置 —— 后台取自
    *     storage.onChanged 事件的新值，比任何"刚写完马上读"都可靠；
    *   - 只有拿不到消息配置时才走这里回读 storage。
-   * （nw:apply 是滑块实时预览，语义就是"应用这个尚未落盘的配置"。） */
-  function syncFromStorage(fallbackRaw) {
+   * （nw:apply 是滑块实时预览，语义就是"应用这个尚未落盘的配置"。）
+   *
+   * 读取失败（扩展被重载、上下文失效等）时什么都不做：保持页面现状，
+   * 绝不能拿旧值去覆盖 —— 那正是"点了白天又闪回黑夜"的来源。 */
+  function syncFromStorage() {
     try {
       chrome.storage.local.get('config', function (res) {
-        if (chrome.runtime.lastError) {
-          if (fallbackRaw) setConfig(fallbackRaw);
-          return;
-        }
+        /* 读 lastError 顺手把它吃掉，避免控制台噪音 */
+        if (chrome.runtime.lastError) return;
         setConfig(res && res.config);
       });
-    } catch (e) {
-      if (fallbackRaw) setConfig(fallbackRaw);
-    }
+    } catch (e) { /* 上下文失效：保持现状即可 */ }
   }
 
   /* ---------- 启动 ---------- */
@@ -246,19 +247,16 @@
 
     // 3) 后续变更
     try {
-      /* storage.onChanged 是**主通道**，不是备份。
+      /* storage.onChanged 是**主通道**，不是备份 —— 页面必须自己监听。
        *
-       * 为什么必须由页面自己监听：
-       *   后台推 tick 依赖 chrome.tabs.sendMessage，而后台在推之前要先
-       *   probe 页面是否应答；probe 有 250ms 硬超时，SW 冷启动、页面正忙、
-       *   content script 还没执行到 addListener 都会让 probe 超时。
-       *   probe 一超时，后台就以为"页面没有 content script"，于是走
-       *   scripting.executeScript 补注入 —— 但 content.js 顶部有防重入
-       *   （window.__nightOwlLoaded），补注入等于什么都没做，tick 也白搭。
-       *   结果：设置已经落盘，页面却保持旧样子，**刷新后才对**。
+       * 为什么不能只靠后台推 tick：tick 走 chrome.tabs.sendMessage，送达与否
+       * 取决于页面此刻的状态 —— SW 正在冷启动、页面主线程繁忙、内容脚本还没
+       * 执行到 addListener 都会让消息丢；扩展加载前就开着的标签页甚至根本没有
+       * 内容脚本。后台那侧虽有 1200ms 探活与补注入兜底，但链路越长越容易漏。
+       * 漏掉一次的表现就是：设置已经落盘，页面却保持旧样子，**刷新后才对**。
        *
-       *   页面自己监听 storage 就绕开了整条消息链路：只要 storage 变了，
-       *   页面必然收到通知，不依赖任何一次 sendMessage 能否送达。 */
+       * 页面自己监听 storage 就绕开了整条消息链路：只要 storage 变了，页面必然
+       * 收到通知，不依赖任何一次 sendMessage 能否送达。 */
       chrome.storage.onChanged.addListener(function (changes, area) {
         if (area === 'local' && changes.config) setConfig(changes.config.newValue);
       });
@@ -278,11 +276,6 @@
         if (msg.type === 'nw:query') {
           sendResponse({ dark: document.documentElement.classList.contains('nw-dark') });
           return;
-        }
-        /* 后台在执行补注入前会先问一句"你在不在"。
-         * 应答这个探针，后台就不必做那次注定无效的 executeScript。 */
-        if (msg.type === 'nw:ping-page') {
-          sendResponse({ ok: true, loaded: true });
         }
       });
     } catch (e) {}

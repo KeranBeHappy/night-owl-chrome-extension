@@ -39,18 +39,6 @@
     "message": "色温",
     "description": "滑块"
   },
-  "popupCool": {
-    "message": "冷",
-    "description": "滑块低端"
-  },
-  "popupWarm": {
-    "message": "暖",
-    "description": "滑块高端"
-  },
-  "popupThisSite": {
-    "message": "当前站点",
-    "description": "分区标题"
-  },
   "popupSiteFollow": {
     "message": "跟随",
     "description": "站点三态：跟随全局自动"

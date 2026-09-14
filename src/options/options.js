@@ -320,7 +320,9 @@
   }
 
   function updatePreview() {
-    $('previewPage').style.filter = FILTER.build(config.theme);
+    /* config 必须传给 build：preserveMedia 开启时父级 invert 要固定为 1，
+     * 预览才与真实页面（content.js 的 buildCss）一致。 */
+    $('previewPage').style.filter = FILTER.build(config.theme, config);
     /* 「高级」里的示例图演示媒体在黑夜模式下的**净效果** = 白天原色 × 媒体亮度。
      * 真实页面里：媒体子级做逆运算、父级再套页面滤镜，两者相抵后只剩这层压暗；
      * 这里没有页面滤镜，所以直接给图套一层 brightness(媒体亮度) 即可，不必套 buildMedia。 */
@@ -715,8 +717,8 @@
   }
 
   /* ---------- 外部改动同步 ----------
-   * 设置页是独立上下文，只有在打开时读了一次配置。
-   * 期间用户可能通过右键菜单 / 快捷键 / popup 改了名单或明暗，
+   * 设置页是独立上下文，打开时只读了一次配置。
+   * 期间用户可能通过快捷键 / popup / 另一个设置页窗口改了名单或明暗，
    * 这里监听 storage，把这些改动实时反映到界面上。 */
   /* 自己 save 导致的回响计数器：每个 save 写盘前 ++，完成后 --。
    * 之所以用计数器而不是布尔，是因为 save 是异步的，多个并发的 save

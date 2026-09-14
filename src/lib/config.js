@@ -147,12 +147,7 @@
     return c;
   }
 
-  function clone(o) {
-    return JSON.parse(JSON.stringify(o));
-  }
-
   var api = {
-    VERSION: VERSION,
     DEFAULTS: DEFAULTS,
     /* normalize / parseTime / timeToMinutes / minutesToTime / clamp —— 公共 API */
     normalize: normalize,
@@ -183,9 +178,9 @@
       }
       return config;
     }
-    /* merge / clone 是 normalize 内部用，不外露 —— 以前在 api 里是死代码。
-     * normalize 的对外契约是"输入任何形状的数据，输出合法 config"，调用方
-     * 不应该自己拼接 merge 调用。 */
+    /* merge 是 normalize 的内部实现，不外露。normalize 的对外契约是
+     * "输入任何形状的数据，输出合法 config"，调用方不该自己拼接 merge 调用。
+     * VERSION 同理不再导出：版本号只由 normalize 写进 config.version。 */
   };
 
   // mount: browser -> globalThis.NW.config ; node -> flat module.exports

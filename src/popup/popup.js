@@ -52,7 +52,7 @@
   }
 
   /* 受限页面：chrome:// 设置页、应用商店、PDF 查看器等，浏览器禁止注入
-   * 内容脚本，夜间模式无法生效。与 background.isInjectableUrl 同一口径。 */
+   * 内容脚本，夜间模式无法生效。与 background.isHttpUrl（同样只认 http 前缀）同一口径。 */
   function isUnsupported(url) {
     return !url || String(url).indexOf('http') !== 0;
   }
@@ -377,7 +377,7 @@
   applyI18n();
   bind();
 
-  /* 外部改动（设置页、右键菜单、快捷键）实时反映到本面板。
+  /* 外部改动（设置页、快捷键、另一个面板窗口）实时反映到本面板。
    * 这是 storage 通道的"反向"半边，让双通道真正闭环。 */
   unsubscribe = STORE.subscribe(function (raw) {
     if (!config) return;

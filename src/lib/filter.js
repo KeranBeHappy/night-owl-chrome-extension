@@ -82,7 +82,12 @@
   /* 页面滤镜。算子顺序固定：invert → hue-rotate → brightness → contrast → saturate → 色温。
    * preserveMedia 开启 → invert 固定 1（可逆，媒体才能还原）；
    * 关闭 → 用用户设定的 invert 强度（观感优先，无需还原）。
-   * ⚠️ buildMedia 里的逆运算顺序必须与此处**严格相反**，改这里就要同步改那里。 */
+   * ⚠️ 两件事必须同时成立，改这里就要同步改那边：
+   *   1) buildMedia 里的逆运算顺序必须与此处**严格相反**；
+   *   2) **cfg 必须真的传进来** —— 漏传会让 preserveOn() 退回 NW.config（配置 API
+   *      对象而非 config），preserveMedia 被判成 false、父级 invert 落在用户强度上，
+   *      而媒体子级仍按 invert(1) 补偿 → 父子不配平（2026-09-14 修过一次这类漏传，
+   *      check.js [11] 有对应回归断言）。 */
   function build(theme, cfg) {
     var inv = clamp(theme.invert, 60, 100) / 100;
     var parts = [];
@@ -106,7 +111,7 @@
    * 逆 = 反序取逆：T2⁻¹ → T1⁻¹ → S⁻¹ → C⁻¹ → B⁻¹ → H⁻¹ → I⁻¹，全部使用同一套 CSS 算子，
    * 因此父子可以精确抵消（只剩 CSS 色域裁剪带来的极小残差）。
    *
-   * 最前面那个 brightness(MEDIA_DIM) 是用户要的"固定压暗"：
+   * 最前面那个 brightness(媒体亮度) 是用户要的"固定压暗"：
    * 它作用在**原色**上，父级链走完后又变回"比白天暗一档"，与滑杆设置无关。 */
   function buildMedia(theme, cfg) {
     if (!preserveOn(cfg)) return 'none';
@@ -127,9 +132,10 @@
     return parts.join(' ');
   }
 
+  /* MEDIA_DIM 只是 mediaDimFactor 的缺省兜底常量，不需要外露
+   * （真实取值一律来自 config.advanced.mediaDim）。 */
   var api = {
     MEDIA_SELECTOR: MEDIA_SELECTOR,
-    MEDIA_DIM: MEDIA_DIM,
     build: build,
     buildMedia: buildMedia
   };

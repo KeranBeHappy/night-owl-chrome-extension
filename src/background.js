@@ -110,10 +110,6 @@ function cbCall(fn) {
   });
 }
 
-function i18n(key) {
-  try { return chrome.i18n.getMessage(key); } catch (e) { return key; }
-}
-
 /* ---------- listener registry ----------
  *
  * LOGICAL name  ->  where the listener actually lives.
@@ -417,14 +413,18 @@ function injectAndTick(tabId) {
   });
 }
 
-/* Push fresh state to every tab.
+/* 把最新状态推给所有标签页。
  *
- * `inject` no longer gates a probe-then-maybe-inject dance; the tick is sent
- * unconditionally and injection is the fallback. Rationale: the tick is
- * idempotent and cheap, while skipping it is a silently broken UI. The page
- * also listens to chrome.storage.onChanged on its own, so even a completely
- * failed tick path still converges - this function is now an accelerator, not
- * a lifeline. */
+ * inject=true（storage.onChanged 与昼夜闹钟路径）：先探活，应答的就直接 tick；
+ * 不答应的标签页才补注入内容脚本 —— 扩展加载前就开着的标签页可能根本没有
+ * 内容脚本，不补注入它会一直保持旧外观（"我改了设置，这个页面没反应"）。
+ * inject=false（信号闹钟路径）：UI 刚落盘，页面要么已有内容脚本、要么会由自己的
+ * storage.onChanged 收敛，只发 tick 不做"探活 + 注入"，省掉一轮 1200ms 等待。
+ *
+ * 无论走哪条路，nw:tick 都是幂等的（content.js 的 setActive 只在 CSS 真变了才写
+ * DOM），多发一次无害；漏发一次才是用户可见的故障。页面自己也监听
+ * chrome.storage.onChanged，所以即使整条 tick 链路全失败最终仍会收敛 ——
+ * 本函数是加速器，不是唯一生命线。 */
 function broadcast(inject) {
   if (!config) return;
   cbCall(chrome.tabs.query, {}).then(function (tabs) {

@@ -39,18 +39,6 @@
     "message": "Warmth",
     "description": "Slider label"
   },
-  "popupCool": {
-    "message": "Cool",
-    "description": "Slider low end"
-  },
-  "popupWarm": {
-    "message": "Warm",
-    "description": "Slider high end"
-  },
-  "popupThisSite": {
-    "message": "This site",
-    "description": "Section label"
-  },
   "popupSiteFollow": {
     "message": "Auto",
     "description": "Site tri-state: follow global"

@@ -1344,6 +1344,9 @@ afterSections(function () {
  * （写一拍滞后）。所以收到 tick 时消息里的配置（后台取自 storage.onChanged
  * 事件的新值）反而比回读更可靠；只有没带配置时才回读 storage。
  * （nw:apply 预览语义不变：直接应用消息配置。）
+ *
+ * 本段还钉住 content.js 的滤镜装配（f）：父级 FILTER.build 必须带 cfg，
+ * 否则 preserveMedia 判定失效、父子滤镜不配平（2026-09-14 修复的回归）。
  */
 afterSections(function () {
   console.log('[11] content.js 抗回退（stale 消息不得回退页面）');
@@ -1444,7 +1447,7 @@ afterSections(function () {
     new vm.Script(read('src/content.js'), { filename: 'content.js' }).runInContext(box);
 
     return {
-      st: st, root: root, chrome: chromeFake, rafQueue: rafQueue,
+      st: st, root: root, head: head, chrome: chromeFake, rafQueue: rafQueue,
       isDark: function () { return root.classList.contains('nw-dark'); },
       runRaf: function () { rafQueue.splice(0).forEach(function (fn) { fn(); }); },
       dispatch: function (msg) { msgListeners.forEach(function (fn) { fn(msg, {}, function () {}); }); },
@@ -1496,6 +1499,20 @@ afterSections(function () {
   (!env2.isDark())
     ? ok('读取恢复后 tick：页面回到白天')
     : bad('读取恢复', '仍为暗');
+
+  /* (f) 回归（2026-09-14）：content.js 的 buildCss 必须把 cfg 传给 FILTER.build。
+   * 漏传时 preserveOn() 退回 NW.config（那是配置 API 对象、没有 .advanced），
+   * preserveMedia 被判成 false -> 父级 invert 落在用户强度（默认 0.92），而媒体
+   * 子级仍按 invert(1) 做逆运算 -> 父子不配平，图片被残余 inversion 污染。
+   * 夹具里的运行时 <style> 挂在 document.head 下，第一行就是父级规则。 */
+  (function () {
+    var env3 = makeContentEnv(darkCfg);
+    var style = env3.head.children[0];
+    var firstLine = style ? String(style.textContent).split('\n')[0] : '';
+    (/nw-dark \{ filter: invert\(1\)/.test(firstLine))
+      ? ok('content.js 父级滤镜带 cfg：preserveMedia 开 -> 父级 invert(1)')
+      : bad('content.js 父级 invert 未固定为 1', firstLine.slice(0, 90));
+  })();
 });
 
 /* [12] 面板换肤：两套主题的 CSS 变量必须齐全

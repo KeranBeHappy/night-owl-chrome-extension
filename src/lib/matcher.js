@@ -149,7 +149,7 @@
     return setSiteDark(config, url, !currentDark);
   }
 
-  /* 右键菜单专用：只在白名单里增删。
+  /* 站点白名单开关专用（快捷键 `nw-toggle-site` 走这里）：只在白名单里增删。
    * 加入时同步从黑名单摘除（否则黑名单会把它拽回黑夜）；
    * 移出后站点恢复为"跟随全局"，全局是夜里就会立刻变暗。 */
   function toggleWhitelist(config, url) {
@@ -168,10 +168,6 @@
     if (inBlack) b.splice(b.indexOf(inBlack), 1);
     w.push(rule);
     return true;
-  }
-
-  function inWhitelist(config, url) {
-    return isListed(config.lists.whitelist, url);
   }
 
   /* 为当前 URL 生成一条规则（host + 非默认端口） */
@@ -196,18 +192,18 @@
   }
 
   /* 公共 API：名单匹配 + 增删改的"用户操作层"函数。
-   * parseRule / matchOne / isListed / ruleFor / matchedRule 全部是
-   * 这一层的内部实现，不再外露 —— 调用方应当用语义化的 siteEnabled /
-   * siteMode / setSiteMode / setSiteDark / toggleSiteDark /
-   * toggleWhitelist / inWhitelist。 */
+   * parseRule / matchOne / isListed / ruleFor / matchedRule 全部是这一层的
+   * 内部实现，不再外露 —— 调用方应当用语义化的 siteEnabled / siteMode /
+   * setSiteMode / toggleWhitelist。
+   * setSiteDark / toggleSiteDark 是"按目标明暗落名单"的旧兼容层，src 内已无
+   * 调用点，仅 check.js [5] 的站点开关回归断言还在用（删它要同步改那段断言）。 */
   var api = {
     siteEnabled: siteEnabled,
     siteMode: siteMode,
     setSiteMode: setSiteMode,
     setSiteDark: setSiteDark,
     toggleSiteDark: toggleSiteDark,
-    toggleWhitelist: toggleWhitelist,
-    inWhitelist: inWhitelist
+    toggleWhitelist: toggleWhitelist
   };
 
   // mount: browser -> globalThis.NW.matcher ; node -> flat module.exports

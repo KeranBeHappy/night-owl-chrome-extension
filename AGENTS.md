@@ -22,12 +22,12 @@ python tools/make_icons.py   # 仅当图标需要重新生成时
 
 - `[1]`–`[4]` JSON / 语法 / lib 加载 / 城市库
 - `[5]` `[5b]` 站点三态 / 手动模式自动恢复
-- `[6]` background 监听器注册与隔离（**总数 8** 的那套断言）
+- `[6]` background 监听器注册与隔离（**总数 5** 的那套断言）
 - `[7]` i18n key 一致性（两库 key 集合 + 占位符）
 - `[8]` 广播 + 徽标（异步断言队列）
 - `[9]` storage 直写通道：真跑 popup DOM 夹具（读 / 写 / 徽标同帧 / 信号闹钟 / 门控 / 换肤）
 - `[10]` preserveMedia 滤镜数学
-- `[11]` content.js 抗回退（stale 消息不得回退页面）
+- `[11]` content.js 抗回退（stale 消息不得回退页面）＋ 父级滤镜必须带 cfg
 - `[12]` 面板换肤 CSS 变量齐全性（两套主题）
 
 ## 沟通约定（用户明确要求，必须遵守）
@@ -69,7 +69,7 @@ config.js（schema + normalize）  ←  一切配置读写的唯一入口
    ├── matcher.js 黑白名单三态与匹配
    ├── filter.js  滤镜串构造（渲染与预览共用）
    └── store.js   popup/options 直连 chrome.storage.local + 发信号闹钟
-background.js（SW）：排程 alarms、徽标、右键菜单、快捷键、广播
+background.js（SW）：排程 alarms、徽标、快捷键、广播
 content.js：页面渲染引擎（防白闪：sessionStorage 缓存 + 异步校准）
 popup / options：UI 面板
 ```
@@ -109,7 +109,9 @@ popup / options：UI 面板
    要么写 storage 靠 `storage.onChanged`。否则就是"面板改了页面不变"的老 bug。
 7. **SW 无常驻状态**：动 `background.js` 里的 `config` 前必须先 `loadConfig()`；
    所有监听器经 `onEvent` 隔离注册，一个失败不能拖死其他监听器。
-   **监听器总数恒为 8**（`tabs.onActivated` 是条件注册，与它兜底的 `onShown` 互斥）；
+   **监听器总数恒为 5**：`storage.onChanged` / `alarms.onAlarm` / `commands.onCommand` /
+   `runtime.onInstalled` / `runtime.onStartup`
+   （右键菜单那批与 `tabs.onActivated` 已随功能移除，不要再加回来）；
    增删监听器要同步 `background.js` 的 `report()` 与 `check.js` 的 `[6]` 段断言。
 8. **content_scripts 的 js 列表在 `manifest.json` 里手工维护**：新增 lib 文件必须同步加进去，
    且顺序即依赖顺序；lib 文件必须同时兼容浏览器（挂 `NW.*`）与 node（`module.exports`）。
@@ -141,10 +143,11 @@ popup / options：UI 面板
 
 ## 已知边界（filter 方案固有，报 bug 前先排除）
 
-- 地图 / 在线设计工具 / PDF 查看器等依赖精确颜色的页面效果差 → 用黑名单处理。
-- `position: fixed` 吸顶导航在部分站点异常 → 「高级」里切换滤镜应用范围，或加黑名单。
-- 图片 / 视频保真：父级滤镜**只允许用可反向算子**（invert / hue-rotate / brightness / contrast / saturate）；
-  `sepia`（色温）与 `grayscale`（灰度）不可反向，用了就会让媒体"怎么补偿都不对"
-  —— 所以色温改用 hue-rotate + saturate、灰度折进 saturate(1-g)，媒体侧做逆运算 +
-  「媒体亮度」压暗（`advanced.mediaDim`，整数百分比 60–100、默认 92，设置页「高级」滑杆可调，
-  仅在 preserveMedia 开启时生效并联动置灰，随配置导出/导入；`check.js` `[10]` 段有断言钉住）。
+- 地图 / 在线设计工具 / PDF 查看器等依赖精确颜色的页面效果差 → 加入「始终白天」名单
+  （保持原色、不套滤镜）；`position: fixed` 吸顶导航异常 → 「高级」里切换滤镜应用范围，
+  或同样加「始终白天」名单。
+- 图片 / 视频保真：父级滤镜**只允许用可反向算子**（invert / hue-rotate / brightness / contrast /
+  saturate）；`sepia`（色温）与 `grayscale`（灰度）不可反向，用了媒体就"怎么补偿都不对" ——
+  故色温改用 hue-rotate + saturate，灰度折进 saturate(1-g)，媒体侧做逆运算 +「媒体亮度」压暗
+  （`advanced.mediaDim` 60–100、默认 92，仅 preserveMedia 开启时生效；`check.js` `[10]` 钉 API 层、
+  `[11] (f)` 钉 content.js 的**调用点必须传 cfg**）。
